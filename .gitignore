@@ -1,0 +1,21 @@
+# Dependencias
+/vendor/
+
+# Configuración sensible
+.env
+config/.env
+
+# Logs y caché
+*.log
+*.cache
+
+# Archivos subidos (no versionar contenido de usuarios)
+/storage/uploads/*
+!/storage/uploads/.gitkeep
+/storage/h5p/
+
+# IDE / SO
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

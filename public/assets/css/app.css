@@ -1,0 +1,311 @@
+/* ==========================================================================
+   Aula Virtual Académica — Sistema de diseño
+   Identidad: "cuaderno de campus" — tinta verde pizarra, papel cálido y
+   acento ámbar (resaltador). Titulares serif (Fraunces) + cuerpo Inter.
+   ========================================================================== */
+
+:root {
+    /* Paleta */
+    --av-ink: #123631;          /* verde pizarra: ancla (navbar, titulares) */
+    --av-ink-deep: #0B2724;
+    --av-paper: #F6F4EE;        /* fondo de página */
+    --av-surface: #FFFFFF;
+    --av-line: #E6E1D4;         /* bordes de línea */
+    --av-accent: #D9962B;       /* ámbar: activo, progreso, resaltado */
+    --av-accent-deep: #B87D1B;
+    --av-accent-soft: #F5E9CB;
+    --av-success: #2E7D5B;
+    --av-danger: #B9463C;
+    --av-muted: #6B726C;
+
+    /* Tipografía */
+    --av-font-display: "Fraunces", Georgia, "Times New Roman", serif;
+    --av-font-body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+
+    /* Sobrescribe tokens de Bootstrap 5.3 */
+    --bs-primary: #123631;
+    --bs-primary-rgb: 18, 54, 49;
+    --bs-success: #2E7D5B;
+    --bs-success-rgb: 46, 125, 91;
+    --bs-danger: #B9463C;
+    --bs-danger-rgb: 185, 70, 60;
+    --bs-warning: #D9962B;
+    --bs-warning-rgb: 217, 150, 43;
+    --bs-body-font-family: var(--av-font-body);
+    --bs-body-bg: var(--av-paper);
+    --bs-body-color: #22302A;
+    --bs-border-radius: 0.5rem;
+    --bs-border-color: var(--av-line);
+    --bs-link-color: #123631;
+    --bs-link-hover-color: #0B2724;
+}
+
+body {
+    background-color: var(--av-paper);
+    color: var(--bs-body-color);
+    font-family: var(--av-font-body);
+    letter-spacing: 0.01em;
+}
+
+/* ---- Tipografía ---- */
+h1, h2, h3, h4, h5, h6,
+.navbar-brand {
+    font-family: var(--av-font-display);
+    letter-spacing: 0;
+}
+
+.display-4, .display-1 {
+    font-family: var(--av-font-display);
+}
+
+.text-muted {
+    color: var(--av-muted) !important;
+}
+
+/* ---- Barra superior ---- */
+.navbar-av {
+    background-color: var(--av-ink);
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.18);
+}
+
+.navbar-av .navbar-brand {
+    font-size: 1.35rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+.navbar-av .navbar-text {
+    color: rgba(255, 255, 255, 0.75);
+}
+
+.navbar-av .btn-outline-light {
+    border-color: rgba(255, 255, 255, 0.4);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.navbar-av .btn-outline-light:hover {
+    background-color: rgba(255, 255, 255, 0.12);
+    color: #fff;
+}
+
+/* ---- Sidebar ---- */
+.sidebar-link {
+    color: #33423B;
+    border-radius: 0.375rem;
+    padding: 0.5rem 0.75rem;
+    display: block;
+    text-decoration: none;
+    border-left: 3px solid transparent;
+    font-size: 0.92rem;
+}
+
+.sidebar-link:hover {
+    background-color: var(--av-accent-soft);
+    color: var(--av-ink-deep);
+}
+
+.sidebar-link.active {
+    background-color: var(--av-accent-soft);
+    color: var(--av-ink-deep);
+    border-left-color: var(--av-accent);
+    font-weight: 600;
+}
+
+/* ---- Tarjetas ---- */
+.card-av {
+    background: var(--av-surface);
+    border: 1px solid var(--av-line);
+    border-radius: 0.625rem;
+    box-shadow: 0 1px 2px rgba(18, 54, 49, 0.04);
+}
+
+.card-av .card-body {
+    padding: 1.1rem 1.25rem;
+}
+
+.card-av > .card-body h2.h6,
+.card-av > .card-body h1.h4,
+.card-av h6, .card-av h5 {
+    font-weight: 600;
+}
+
+/* ---- Banda de bienvenida (elemento memorable) ---- */
+.welcome-band {
+    background:
+        radial-gradient(120% 140% at 100% 0%, rgba(217, 150, 43, 0.16) 0%, rgba(18, 54, 49, 0) 45%),
+        var(--av-ink);
+    color: #F2EFE4;
+    border-radius: 0.75rem;
+    padding: 1.75rem 1.9rem;
+    border: none;
+}
+
+.welcome-band h1 {
+    font-size: clamp(1.6rem, 3.2vw, 2.4rem);
+    font-weight: 600;
+    margin: 0 0 0.35rem;
+}
+
+.welcome-band .lead,
+.welcome-band p {
+    color: rgba(242, 239, 228, 0.78);
+    max-width: 62ch;
+}
+
+.welcome-band .welcome-stat {
+    font-family: var(--av-font-display);
+    font-size: 2.2rem;
+    line-height: 1;
+    color: #F0C979;
+}
+
+.welcome-band .welcome-label {
+    color: rgba(242, 239, 228, 0.6);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+/* ---- Botones ---- */
+.btn {
+    font-weight: 500;
+}
+
+.btn-primary {
+    color: #fff;
+}
+
+.btn-outline-secondary {
+    color: #33423B;
+    border-color: #CFC9BA;
+}
+
+.btn-outline-secondary:hover {
+    background-color: #EDE9DD;
+    color: var(--av-ink-deep);
+    border-color: #BFB8A6;
+}
+
+/* ---- Insignias / estados ---- */
+.badge.bg-primary,
+.badge.bg-success,
+.badge.bg-danger,
+.badge.bg-warning,
+.badge.bg-secondary,
+.badge.bg-info {
+    letter-spacing: 0.02em;
+}
+
+.badge.bg-secondary {
+    background-color: #E3DFD3 !important;
+    color: #5A625C !important;
+}
+
+.badge.bg-info {
+    background-color: #DDEAE6 !important;
+    color: #123631 !important;
+}
+
+/* ---- Progreso ---- */
+.progress-av {
+    height: 0.55rem;
+    background-color: #EAE5D8;
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.progress-av .progress-bar,
+.progress .progress-bar.bg-primary {
+    background-color: var(--av-accent);
+}
+
+.progress .progress-bar {
+    background-color: var(--av-accent);
+}
+
+/* ---- Tablas ---- */
+.table thead th {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #66706A;
+    border-bottom: 1px solid var(--av-line);
+}
+
+.table-light {
+    --bs-table-bg: #F3F0E7;
+}
+
+/* ---- Formularios ---- */
+.form-control,
+.form-select {
+    border-color: #D6CFBE;
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--av-accent);
+    box-shadow: 0 0 0 0.2rem rgba(217, 150, 43, 0.18);
+}
+
+/* ---- Alertas ---- */
+.alert {
+    border: none;
+    border-left: 4px solid transparent;
+    border-radius: 0.5rem;
+}
+
+.alert-danger { border-left-color: var(--av-danger); }
+.alert-success { border-left-color: var(--av-success); }
+.alert-info { border-left-color: #3B82A6; }
+
+/* ---- Bloque de contenido ---- */
+.block-sortable {
+    border-left: 4px solid var(--av-accent);
+}
+
+.block-inactive {
+    opacity: 0.55;
+}
+
+.block-text {
+    line-height: 1.65;
+    max-width: 72ch;
+}
+
+/* ---- Actividades ---- */
+.activity-feedback {
+    min-height: 1.2em;
+}
+
+/* ---- Login ---- */
+.login-brand {
+    font-family: var(--av-font-display);
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--av-ink);
+}
+
+/* ---- Accesibilidad ---- */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    outline: 3px solid rgba(217, 150, 43, 0.6);
+    outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation: none !important;
+        transition: none !important;
+    }
+}
+
+/* ---- Enlaces de la barra lateral en móvil ---- */
+@media (max-width: 991.98px) {
+    .welcome-band {
+        padding: 1.25rem 1.25rem;
+    }
+}
