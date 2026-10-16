@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Units\Services;
 
 use App\Core\Exceptions\HttpException;
+use App\Core\Html\HtmlSanitizer;
 use App\Modules\Audit\Services\AuditService;
 use App\Modules\Content\Models\ContentBlock;
 use App\Modules\Content\Repositories\ContentBlockRepository;
@@ -43,6 +44,11 @@ final class UnitEditorService
         $content = (string) ($input['content'] ?? '');
         $settings = $input['settings'] ?? null;
 
+        // Los bloques de texto guardan HTML enriquecido; se sanitiza antes de persistir.
+        if ($type === 'TEXT') {
+            $content = HtmlSanitizer::clean($content);
+        }
+
         // Validación específica por tipo.
         if ($type === 'VIDEO' && $content !== '' && ! preg_match('/^[A-Za-z0-9_-]{6,20}$/', $content)) {
             throw HttpException::unprocessable('El identificador de video de YouTube es inválido.');
@@ -72,6 +78,10 @@ final class UnitEditorService
         $title = trim((string) ($input['title'] ?? $block->title));
         $content = (string) ($input['content'] ?? $block->content);
         $settings = $input['settings'] ?? $block->settings;
+
+        if ($block->type === 'TEXT') {
+            $content = HtmlSanitizer::clean($content);
+        }
 
         if ($block->type === 'VIDEO' && $content !== '' && ! preg_match('/^[A-Za-z0-9_-]{6,20}$/', $content)) {
             throw HttpException::unprocessable('El identificador de video de YouTube es inválido.');

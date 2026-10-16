@@ -17,6 +17,9 @@
                     </div>
                     <button type="submit" class="btn btn-primary w-100">Iniciar sesión</button>
                 </form>
+                <div class="text-center mt-3">
+                    <a href="<?= url('/register') ?>" class="small">¿No tienes cuenta? Regístrate</a>
+                </div>
             </div>
         </div>
     </div>

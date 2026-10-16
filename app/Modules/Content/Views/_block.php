@@ -2,12 +2,14 @@
 /** @var \App\Modules\Content\Models\ContentBlock $block  Renderizado de lectura de un bloque. */
 use App\Core\Auth\Auth;
 use App\Core\Csrf\Csrf;
+use App\Core\Html\HtmlSanitizer;
 
 $isStudent = Auth::check() && Auth::hasRole('STUDENT');
 
 switch ($block->type) {
     case 'TEXT':
-        echo '<div class="block-text">' . nl2br(e($block->content)) . '</div>';
+        // Contenido enriquecido (HTML sanitizado en guardado y de nuevo al renderizar).
+        echo '<div class="rich-text">' . HtmlSanitizer::clean($block->content) . '</div>';
         break;
     case 'IMAGE':
         echo '<img src="' . url('/files/' . (int) $block->content) . '" alt="' . e($block->title) . '" class="img-fluid rounded">';

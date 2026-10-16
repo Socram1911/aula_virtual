@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Users\Controllers;
 
 use App\Core\Controller;
+use App\Core\Mail\Mailer;
 use App\Core\Session\Session;
 use App\Modules\Users\Models\User;
 use App\Modules\Users\Services\UserService;
@@ -25,7 +26,40 @@ final class UserController extends Controller
         $this->render('Users/index', [
             'title' => 'Usuarios',
             'users' => $this->service->all(),
+            'pending' => $this->service->pending(),
         ]);
+    }
+
+    public function approve(int $id): void
+    {
+        $this->requireRole('ADMIN');
+        $this->render('Users/approve', [
+            'title' => 'Aprobar cuenta',
+            'user' => $this->service->find($id),
+            'roles' => UserService::ROLES,
+        ]);
+    }
+
+    public function approveStore(int $id): void
+    {
+        $this->requireRole('ADMIN');
+        $input = $this->request->all();
+        try {
+            $result = $this->service->approve($id, $input['roles'] ?? []);
+        } catch (\App\Core\Exceptions\HttpException $e) {
+            $this->backWithErrors(url('/users/' . $id . '/approve'), $e->details() ?: [$e->getMessage()], $input);
+            return;
+        }
+
+        $user = $result['user'];
+        $sent = $this->notifyAccepted($user, $result['password']);
+
+        if ($sent) {
+            Session::flash('_success', "Cuenta de {$user->fullName()} aprobada. Se envió el correo con la contraseña.");
+        } else {
+            Session::flash('_success', "Cuenta de {$user->fullName()} aprobada. No se pudo enviar el correo (API de Resend no configurada).");
+        }
+        $this->redirect(url('/users'));
     }
 
     public function teachers(): void
@@ -81,5 +115,26 @@ final class UserController extends Controller
         $this->service->delete($id);
         Session::flash('_success', 'Usuario eliminado.');
         $this->redirect(url('/users'));
+    }
+
+    /** Envía el correo de aceptación con la contraseña generada. */
+    private function notifyAccepted(User $user, string $password): bool
+    {
+        $loginUrl = url('/login');
+        $roles = implode(', ', $user->roles);
+        $subject = 'Tu cuenta en Aula Virtual Académica ha sido aprobada';
+
+        $html = '<div style="font-family:sans-serif;color:#22302A;max-width:560px">'
+            . '<h2 style="color:#123631">¡Bienvenido, ' . e($user->first_name) . '!</h2>'
+            . '<p>Tu cuenta en <strong>Aula Virtual Académica</strong> ha sido aprobada.</p>'
+            . '<p>Tipo de cuenta: <strong>' . e($roles) . '</strong></p>'
+            . '<p>Puedes iniciar sesión con las siguientes credenciales:</p>'
+            . '<p><strong>Correo:</strong> ' . e($user->email) . '<br>'
+            . '<strong>Contraseña temporal:</strong> <code style="font-size:16px">' . e($password) . '</code></p>'
+            . '<p><a href="' . e($loginUrl) . '" style="background:#123631;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none">Iniciar sesión</a></p>'
+            . '<p style="color:#6B726C;font-size:12px">Por seguridad, cambia tu contraseña después de iniciar sesión.</p>'
+            . '</div>';
+
+        return Mailer::send($user->email, $subject, $html);
     }
 }

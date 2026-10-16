@@ -12,4 +12,6 @@ Router::get('/users/create', "{$c}@create");
 Router::post('/users', "{$c}@store");
 Router::get('/users/{id}/edit', "{$c}@edit");
 Router::post('/users/{id}', "{$c}@update");
+Router::get('/users/{id}/approve', "{$c}@approve");
+Router::post('/users/{id}/approve', "{$c}@approveStore");
 Router::post('/users/{id}/delete', "{$c}@destroy");

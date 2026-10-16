@@ -82,6 +82,8 @@ $isStudent = in_array('STUDENT', $roles, true);
                         <a class="sidebar-link" href="<?= url('/audit') ?>">Auditoría</a>
                         <a class="sidebar-link" href="<?= url('/grades') ?>">Calificaciones</a>
                     <?php endif; ?>
+                    <hr class="my-1">
+                    <a class="sidebar-link<?= ($_SERVER['REQUEST_URI'] ?? '') === url('/account/password') ? ' active' : '' ?>" href="<?= url('/account/password') ?>">Cambiar contraseña</a>
                 </div>
             </div>
         </div>
@@ -107,5 +109,6 @@ $isStudent = in_array('STUDENT', $roles, true);
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="<?= asset('h5p-standalone/main.bundle.js') ?>"></script>
 <script src="<?= asset('js/app.js') ?>"></script>
+<script src="<?= asset('js/auth.js') ?>"></script>
 </body>
 </html>

@@ -81,6 +81,28 @@ final class UserRepository
         Connection::run('UPDATE users SET password_hash = :h WHERE id = :id', [':h' => $hash, ':id' => $id]);
     }
 
+    public function updateStatus(int $id, string $status): void
+    {
+        Connection::run('UPDATE users SET status = :s WHERE id = :id', [':s' => $status, ':id' => $id]);
+    }
+
+    /** Hash de contraseña actual del usuario (para verificación de cambio de contraseña). */
+    public function passwordHash(int $id): ?string
+    {
+        $row = Connection::fetch('SELECT password_hash FROM users WHERE id = :id', [':id' => $id]);
+        return $row === null ? null : ($row['password_hash'] ?? null);
+    }
+
+    /** Usuarios pendientes de aprobación (registro propio). */
+    public function pending(): array
+    {
+        $rows = Connection::fetchAll(
+            'SELECT id, first_name, last_name, email, status FROM users WHERE status = :s ORDER BY id ASC',
+            [':s' => 'PENDING']
+        );
+        return array_map([User::class, 'fromArray'], $rows);
+    }
+
     public function delete(int $id): void
     {
         Connection::run('DELETE FROM users WHERE id = :id', [':id' => $id]);
