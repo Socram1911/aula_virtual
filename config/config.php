@@ -47,6 +47,11 @@ function env_load(string $path): void
 
 env_load(dirname(__DIR__) . DIRECTORY_SEPARATOR . '.env');
 
+// Zona horaria de la aplicación: debe coincidir con la de la base de datos para
+// que las comparaciones de fechas (p. ej. ventana de disponibilidad de evaluaciones)
+// sean consistentes. Por defecto UTC.
+date_default_timezone_set((string) getenv('APP_TIMEZONE') ?: 'UTC');
+
 /**
  * Devuelve un valor de configuración con un valor por defecto.
  */

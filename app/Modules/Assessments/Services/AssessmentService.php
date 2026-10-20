@@ -25,6 +25,12 @@ final class AssessmentService
         return $this->repository->all();
     }
 
+    /** Evaluaciones visibles para un docente (las de sus Saberes asignados). */
+    public function forTeacher(int $teacherId): array
+    {
+        return $this->repository->forTeacher($teacherId);
+    }
+
     public function find(int $id): Assessment
     {
         $assessment = $this->repository->find($id);

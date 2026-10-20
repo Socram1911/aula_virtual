@@ -52,12 +52,13 @@ final class UserController extends Controller
         }
 
         $user = $result['user'];
-        $sent = $this->notifyAccepted($user, $result['password']);
+        $mail = $this->notifyAccepted($user, $result['password']);
 
-        if ($sent) {
-            Session::flash('_success', "Cuenta de {$user->fullName()} aprobada. Se envió el correo con la contraseña.");
+        if ($mail['ok']) {
+            Session::flash('_success', "Cuenta de {$user->fullName()} aprobada y correo enviado con la contraseña.");
         } else {
-            Session::flash('_success', "Cuenta de {$user->fullName()} aprobada. No se pudo enviar el correo (API de Resend no configurada).");
+            // La cuenta queda aprobada, pero se informa el motivo del fallo del correo.
+            Session::flash('_success', "Cuenta de {$user->fullName()} aprobada. Correo NO enviado: {$mail['message']}");
         }
         $this->redirect(url('/users'));
     }
@@ -118,7 +119,7 @@ final class UserController extends Controller
     }
 
     /** Envía el correo de aceptación con la contraseña generada. */
-    private function notifyAccepted(User $user, string $password): bool
+    private function notifyAccepted(User $user, string $password): array
     {
         $loginUrl = url('/login');
         $roles = implode(', ', $user->roles);

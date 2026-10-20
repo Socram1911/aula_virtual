@@ -46,8 +46,9 @@ final class GradeService
 
         Connection::run(
             'INSERT INTO grades (saber_assignment_id, student_id, source_type, source_id, score, percentage, grade_value, comments, graded_by, graded_at)
-             VALUES (:a, :s, :st, :sid, :score, :pct, :gv, :c, :gb, :at)
-             ON DUPLICATE KEY UPDATE score = :score, percentage = :pct, grade_value = :gv, graded_at = :at',
+             VALUES (:a, :s, :st, :sid, :score, :pct, :gv, :c, :gb, :at)'
+            . Connection::onConflict('saber_assignment_id, student_id, source_type, source_id')
+            . 'score = :score, percentage = :pct, grade_value = :gv, graded_at = :at',
             [
                 ':a' => $saberAssignmentId, ':s' => $studentId, ':st' => $sourceType, ':sid' => $sourceId,
                 ':score' => $score, ':pct' => $percentage, ':gv' => $gradeValue,

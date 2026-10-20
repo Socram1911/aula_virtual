@@ -148,7 +148,8 @@ final class AttemptService
             throw HttpException::forbidden('La evaluación ya no está disponible.');
         }
 
-        // Verifica que el estudiante tenga acceso (asignación publicada de su sección).
+        // Verifica que el estudiante tenga acceso a través de su sección.
+        $hasAccess = false;
         if ($assessment->saber_assignment_id !== null) {
             $row = Connection::fetch(
                 'SELECT sa.id FROM saber_assignments sa
@@ -156,9 +157,28 @@ final class AttemptService
                  WHERE sa.id = :a AND sa.status = :published',
                 [':s' => $studentId, ':enr' => 'ENROLLED', ':a' => $assessment->saber_assignment_id, ':published' => 'PUBLISHED']
             );
-            if ($row === null) {
-                throw HttpException::forbidden('No tiene acceso a esta evaluación.');
-            }
+            $hasAccess = $row !== null;
+        } elseif ($assessment->unit_id !== null) {
+            // Evaluación asociada a una unidad: acceso si la unidad está publicada y el
+            // estudiante pertenece a una sección con el Saber de esa unidad asignado.
+            $row = Connection::fetch(
+                'SELECT u.id FROM units u
+                 JOIN saber_assignments sa ON sa.saber_id = u.saber_id AND sa.status = :published
+                 JOIN section_students ss ON ss.section_id = sa.section_id AND ss.student_id = :s AND ss.status = :enr
+                 WHERE u.id = :uid AND u.status = :upub LIMIT 1',
+                [
+                    ':s' => $studentId,
+                    ':enr' => 'ENROLLED',
+                    ':published' => 'PUBLISHED',
+                    ':uid' => $assessment->unit_id,
+                    ':upub' => 'PUBLISHED',
+                ]
+            );
+            $hasAccess = $row !== null;
+        }
+
+        if (! $hasAccess) {
+            throw HttpException::forbidden('No tiene acceso a esta evaluación.');
         }
 
         return $assessment;

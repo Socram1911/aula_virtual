@@ -374,6 +374,38 @@ h1, h2, h3, h4, h5, h6,
     color: var(--av-ink);
 }
 
+/* Página de login: imagen de fondo a pantalla completa en móvil;
+   en escritorio la imagen ocupa la columna izquierda y el formulario va a la derecha. */
+.login-page {
+    min-height: 100vh;
+}
+
+.login-hero {
+    background: url('../img/login-bg.png') no-repeat center center / cover;
+    min-height: 100vh;
+}
+
+/* Columna del formulario (izquierda): fondo claro con patrón (hero patterns). */
+.login-page > .row > div:first-child {
+    background-color: #f3efdf;
+    background-image: url("data:image/svg+xml,%3Csvg width='12' height='16' viewBox='0 0 12 16' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4 .99C4 .445 4.444 0 5 0c.552 0 1 .45 1 .99v4.02C6 5.555 5.556 6 5 6c-.552 0-1-.45-1-.99V.99zm6 8c0-.546.444-.99 1-.99.552 0 1 .45 1 .99v4.02c0 .546-.444.99-1 .99-.552 0-1-.45-1-.99V8.99z' fill='%2388ab7d' fill-opacity='0.35' fill-rule='evenodd'/%3E%3C/svg%3E");
+}
+
+@media (max-width: 991.98px) {
+    .login-page {
+        background: url('../img/login-bg.png') no-repeat center center / cover;
+    }
+
+    .login-page > .row > div:first-child {
+        background: rgba(243, 241, 234, 0.85);
+    }
+
+    .login-page .card {
+        background: rgba(255, 255, 255, 0.94);
+        backdrop-filter: blur(4px);
+    }
+}
+
 /* ---- Accesibilidad ---- */
 a:focus-visible,
 button:focus-visible,

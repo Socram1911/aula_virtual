@@ -65,6 +65,7 @@ $isStudent = in_array('STUDENT', $roles, true);
                         <a class="sidebar-link<?= ($_SERVER['REQUEST_URI'] ?? '') === url('/dashboard') ? ' active' : '' ?>" href="<?= url('/dashboard') ?>">Mis Saberes</a>
                         <a class="sidebar-link" href="<?= url('/sections') ?>">Secciones</a>
                         <a class="sidebar-link" href="<?= url('/saber-assignments') ?>">Asignaciones</a>
+                        <a class="sidebar-link" href="<?= url('/assessments') ?>">Evaluaciones</a>
                         <a class="sidebar-link" href="<?= url('/grades') ?>">Calificaciones</a>
                         <a class="sidebar-link" href="<?= url('/reports') ?>">Reportes</a>
                     <?php endif; ?>
@@ -78,6 +79,7 @@ $isStudent = in_array('STUDENT', $roles, true);
                         <a class="sidebar-link" href="<?= url('/academic-periods') ?>">Períodos</a>
                         <a class="sidebar-link" href="<?= url('/tracks') ?>">Trayectos</a>
                         <a class="sidebar-link" href="<?= url('/sabers') ?>">Saberes</a>
+                        <a class="sidebar-link" href="<?= url('/assessments') ?>">Evaluaciones</a>
                         <a class="sidebar-link" href="<?= url('/reports') ?>">Reportes</a>
                         <a class="sidebar-link" href="<?= url('/audit') ?>">Auditoría</a>
                         <a class="sidebar-link" href="<?= url('/grades') ?>">Calificaciones</a>

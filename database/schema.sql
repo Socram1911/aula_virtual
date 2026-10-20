@@ -321,3 +321,20 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_audit_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Seguimiento de visualización de contenido (validación de que el estudiante vio el material).
+-- Columnas idempotentes (MariaDB admite ADD COLUMN IF NOT EXISTS).
+ALTER TABLE student_block_progress ADD COLUMN IF NOT EXISTS viewed_at DATETIME NULL;
+ALTER TABLE student_block_progress ADD COLUMN IF NOT EXISTS video_percent DECIMAL(5,2) NULL;
+
+CREATE TABLE IF NOT EXISTS content_view_logs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    student_id INT UNSIGNED NOT NULL,
+    block_id INT UNSIGNED NOT NULL,
+    action ENUM('VIEWED','COMPLETED','VIDEO_PROGRESS') NOT NULL,
+    meta JSON NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_view_student_block (student_id, block_id),
+    CONSTRAINT fk_cvl_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_cvl_block FOREIGN KEY (block_id) REFERENCES content_blocks(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

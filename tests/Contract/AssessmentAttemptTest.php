@@ -26,6 +26,21 @@ $trackId = Connection::insert('INSERT INTO tracks (code, name, position, status)
 $saberId = Connection::insert('INSERT INTO sabers (code, name, track_id, status) VALUES (?, ?, ?, ?)', ['S-TEST2', 'Saber Test 2', $trackId, 'ACTIVE']);
 $unitId = Connection::insert('INSERT INTO units (saber_id, title, position, status) VALUES (?, ?, ?, ?)', [$saberId, 'Unidad Test 2', 1, 'PUBLISHED']);
 
+// Cadena de acceso: período → sección → asignación publicada → inscripción del estudiante.
+$periodId = Connection::insert(
+    'INSERT INTO academic_periods (name, code, start_date, end_date, status) VALUES (?, ?, ?, ?, ?)',
+    ['Período Test', 'P-TEST2', '2026-01-01', '2026-12-31', 'ACTIVE']
+);
+$sectionId = Connection::insert(
+    'INSERT INTO sections (academic_period_id, track_id, number, status) VALUES (?, ?, ?, ?)',
+    [$periodId, $trackId, 99, 'ACTIVE']
+);
+$assignmentId = Connection::insert(
+    'INSERT INTO saber_assignments (saber_id, section_id, academic_period_id, status) VALUES (?, ?, ?, ?)',
+    [$saberId, $sectionId, $periodId, 'PUBLISHED']
+);
+Connection::run('INSERT INTO section_students (section_id, student_id, enrollment_date, status) VALUES (?, ?, ?, ?)', [$sectionId, $studentId, date('Y-m-d'), 'ENROLLED']);
+
 $assessmentId = Connection::insert(
     'INSERT INTO assessments (unit_id, title, max_score, passing_score, status) VALUES (?, ?, ?, ?, ?)',
     [$unitId, 'Evaluación Test', 10, 6, 'PUBLISHED']
@@ -69,6 +84,10 @@ try {
     );
 } finally {
     Connection::run('DELETE FROM assessments WHERE id = ?', [$assessmentId]);
+    Connection::run('DELETE FROM section_students WHERE section_id = ?', [$sectionId]);
+    Connection::run('DELETE FROM saber_assignments WHERE id = ?', [$assignmentId]);
+    Connection::run('DELETE FROM sections WHERE id = ?', [$sectionId]);
+    Connection::run('DELETE FROM academic_periods WHERE id = ?', [$periodId]);
     Connection::run('DELETE FROM units WHERE id = ?', [$unitId]);
     Connection::run('DELETE FROM sabers WHERE id = ?', [$saberId]);
     Connection::run('DELETE FROM tracks WHERE id = ?', [$trackId]);

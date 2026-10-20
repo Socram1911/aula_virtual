@@ -47,8 +47,9 @@ final class AttemptRepository
     {
         Connection::run(
             'INSERT INTO attempt_answers (attempt_id, question_id, answer_value, is_correct, score)
-             VALUES (:a, :q, :v, :c, :s)
-             ON DUPLICATE KEY UPDATE answer_value = :v, is_correct = :c, score = :s',
+             VALUES (:a, :q, :v, :c, :s)'
+            . Connection::onConflict('attempt_id, question_id')
+            . 'answer_value = :v, is_correct = :c, score = :s',
             [':a' => $attemptId, ':q' => $questionId, ':v' => $value, ':c' => $correct ? 1 : 0, ':s' => $score]
         );
     }

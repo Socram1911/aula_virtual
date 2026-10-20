@@ -21,8 +21,7 @@ $pdo = Connection::pdo();
 
 $roles = ['ADMIN', 'TEACHER', 'STUDENT'];
 foreach ($roles as $role) {
-    $stmt = $pdo->prepare('INSERT INTO roles (name) VALUES (:name) ON DUPLICATE KEY UPDATE name = VALUES(name)');
-    $stmt->execute([':name' => $role]);
+    Connection::insertIgnore('roles', 'name', $role);
 }
 echo "Roles sembrados: " . implode(', ', $roles) . "\n";
 

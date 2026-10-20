@@ -36,14 +36,23 @@ final class LearningController extends Controller
     {
         $this->requireRole('STUDENT');
         $studentId = (int) Auth::id();
+        // Evaluaciones publicadas accesibles al estudiante, tanto las ligadas a una
+        // asignación de Saber como las ligadas a una unidad de su Saber.
         $assessments = Connection::fetchAll(
-            'SELECT a.id, a.title, a.max_score, a.passing_score, a.status, sa.saber_id
+            'SELECT a.id, a.title, a.max_score, a.passing_score, a.status
              FROM assessments a
-             JOIN saber_assignments sa ON sa.id = a.saber_assignment_id
+             JOIN saber_assignments sa ON sa.id = a.saber_assignment_id AND sa.status = :pub
              JOIN section_students ss ON ss.section_id = sa.section_id AND ss.student_id = :s AND ss.status = :enr
              WHERE a.status = :pub
-             ORDER BY a.id DESC',
-            [':s' => $studentId, ':enr' => 'ENROLLED', ':pub' => 'PUBLISHED']
+             UNION
+             SELECT a.id, a.title, a.max_score, a.passing_score, a.status
+             FROM assessments a
+             JOIN units u ON u.id = a.unit_id AND u.status = :upub
+             JOIN saber_assignments sa2 ON sa2.saber_id = u.saber_id AND sa2.status = :pub
+             JOIN section_students ss2 ON ss2.section_id = sa2.section_id AND ss2.student_id = :s AND ss2.status = :enr
+             WHERE a.status = :pub
+             ORDER BY id DESC',
+            [':s' => $studentId, ':enr' => 'ENROLLED', ':pub' => 'PUBLISHED', ':upub' => 'PUBLISHED']
         );
         $this->render('Learning/my_activities', [
             'title' => 'Actividades y Evaluaciones',

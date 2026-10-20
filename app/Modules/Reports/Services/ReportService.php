@@ -79,4 +79,55 @@ final class ReportService
              ORDER BY aa.id DESC LIMIT 200'
         );
     }
+
+    /**
+     * Detalle de visualización de contenido por unidad:
+     * devuelve la unidad, sus bloques y, por cada estudiante inscrito en las
+     * secciones del Saber, el estado de visualización de cada bloque.
+     */
+    public function unitContentProgress(int $unitId): array
+    {
+        $unit = Connection::fetch(
+            'SELECT u.id, u.title, u.saber_id, s.name AS saber_name
+             FROM units u JOIN sabers s ON s.id = u.saber_id WHERE u.id = :id',
+            [':id' => $unitId]
+        );
+        if ($unit === null) {
+            throw new \App\Core\Exceptions\HttpException(404, 'Unidad no encontrada.');
+        }
+
+        $blocks = Connection::fetchAll(
+            'SELECT id, type, title, position, status FROM content_blocks WHERE unit_id = :u ORDER BY position, id',
+            [':u' => $unitId]
+        );
+
+        // Estudiantes inscritos en las secciones que tienen asignado este Saber.
+        $students = Connection::fetchAll(
+            'SELECT DISTINCT u.id, u.first_name, u.last_name, u.email
+             FROM users u
+             JOIN section_students ss ON ss.student_id = u.id AND ss.status = :enr
+             JOIN saber_assignments sa ON sa.section_id = ss.section_id
+             WHERE sa.saber_id = :saber
+             ORDER BY u.last_name, u.first_name',
+            [':enr' => 'ENROLLED', ':saber' => (int) $unit['saber_id']]
+        );
+
+        foreach ($students as &$student) {
+            $progress = Connection::fetchAll(
+                'SELECT block_id, status, viewed_at, completed_at, video_percent
+                 FROM student_block_progress WHERE student_id = :s',
+                [':s' => (int) $student['id']]
+            );
+            $student['blocks'] = [];
+            foreach ($progress as $p) {
+                $student['blocks'][(int) $p['block_id']] = $p;
+            }
+        }
+
+        return [
+            'unit' => $unit,
+            'blocks' => $blocks,
+            'students' => $students,
+        ];
+    }
 }

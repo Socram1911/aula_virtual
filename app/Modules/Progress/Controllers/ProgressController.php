@@ -49,15 +49,36 @@ final class ProgressController extends Controller
         ]]);
     }
 
-    /** POST /api/progress/video */
-    public function videoEvent(): void
+    /** POST /api/progress/view — registra que el estudiante vio un bloque. */
+    public function viewBlock(): void
     {
         Auth::requireRole('STUDENT');
         $blockId = (int) ($this->request->json()['block_id'] ?? 0);
-        $event = (string) ($this->request->json()['event'] ?? '');
-        if ($event === 'video_completed') {
-            $this->service->markBlockCompleted((int) Auth::id(), $blockId);
+        $block = Connection::fetch('SELECT id FROM content_blocks WHERE id = :id', [':id' => $blockId]);
+        if ($block === null) {
+            throw HttpException::notFound('Bloque no encontrado.');
         }
+        $this->service->recordView((int) Auth::id(), $blockId);
+        $this->json(['data' => ['recorded' => true]]);
+    }
+
+    /** POST /api/progress/video — eventos del reproductor de video (inicio, avance, finalizado). */
+    public function videoEvent(): void
+    {
+        Auth::requireRole('STUDENT');
+        $studentId = (int) Auth::id();
+        $blockId = (int) ($this->request->json()['block_id'] ?? 0);
+        $event = (string) ($this->request->json()['event'] ?? '');
+        $percent = (float) ($this->request->json()['percent'] ?? 0);
+
+        if ($event === 'video_started') {
+            $this->service->recordView($studentId, $blockId);
+        } elseif ($event === 'video_progress') {
+            $this->service->recordVideoProgress($studentId, $blockId, $percent);
+        } elseif ($event === 'video_completed') {
+            $this->service->markBlockCompleted($studentId, $blockId);
+        }
+
         $this->json(['data' => ['recorded' => true]]);
     }
 }

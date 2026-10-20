@@ -15,7 +15,10 @@ switch ($block->type) {
         echo '<img src="' . url('/files/' . (int) $block->content) . '" alt="' . e($block->title) . '" class="img-fluid rounded">';
         break;
     case 'VIDEO':
-        echo '<div class="ratio ratio-16x9"><iframe src="https://www.youtube.com/embed/' . e($block->content) . '" title="' . e($block->title) . '" allowfullscreen></iframe></div>';
+        echo '<div class="ratio ratio-16x9">'
+            . '<iframe id="yt-' . (int) $block->id . '" class="yt-tracked" data-block-id="' . (int) $block->id . '"'
+            . ' src="https://www.youtube.com/embed/' . e($block->content) . '?enablejsapi=1"'
+            . ' title="' . e($block->title) . '" allowfullscreen></iframe></div>';
         break;
     case 'PDF':
         echo '<a href="' . url('/files/' . (int) $block->content) . '" target="_blank" class="btn btn-outline-danger">' . e($block->title ?: 'Abrir PDF') . '</a>';

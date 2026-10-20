@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Modules\Assessments\Controllers;
 
+use App\Core\Auth\Auth;
 use App\Core\Controller;
 use App\Core\Database\Connection;
 use App\Core\Session\Session;
 use App\Modules\Assessments\Models\Assessment;
 use App\Modules\Assessments\Services\AssessmentService;
+use App\Modules\Sabers\Services\AssignmentService;
 
 final class AssessmentController extends Controller
 {
@@ -20,24 +22,46 @@ final class AssessmentController extends Controller
         $this->service = new AssessmentService();
     }
 
+    /** Unidades y asignaciones disponibles: todas para ADMIN; solo las propias para TEACHER. */
     private function options(): array
     {
+        if (Auth::hasRole('ADMIN')) {
+            return [
+                'units' => Connection::fetchAll('SELECT id, title FROM units ORDER BY id DESC'),
+                'assignments' => Connection::fetchAll(
+                    'SELECT sa.id, CONCAT(s.name, " - Sección ", sec.number) AS label
+                     FROM saber_assignments sa
+                     JOIN sabers s ON s.id = sa.saber_id
+                     JOIN sections sec ON sec.id = sa.section_id
+                     ORDER BY sa.id DESC'
+                ),
+            ];
+        }
+
+        $assignments = (new AssignmentService())->forTeacher((int) Auth::id());
+        $saberIds = array_unique(array_map(fn ($a) => (int) $a->saber_id, $assignments));
+        $units = $saberIds === []
+            ? []
+            : Connection::fetchAll(
+                'SELECT id, title FROM units WHERE saber_id IN (' . implode(',', $saberIds) . ') ORDER BY id DESC'
+            );
+
         return [
-            'units' => Connection::fetchAll('SELECT id, title FROM units ORDER BY id DESC'),
-            'assignments' => Connection::fetchAll(
-                'SELECT sa.id, CONCAT(s.name, " - Sección ", sec.number) AS label
-                 FROM saber_assignments sa
-                 JOIN sabers s ON s.id = sa.saber_id
-                 JOIN sections sec ON sec.id = sa.section_id
-                 ORDER BY sa.id DESC'
-            ),
+            'units' => $units,
+            'assignments' => array_map(fn ($a) => [
+                'id' => $a->id,
+                'label' => $a->saber_name . ' - Sección ' . $a->section_number,
+            ], $assignments),
         ];
     }
 
     public function index(): void
     {
         $this->requireRole(['ADMIN', 'TEACHER']);
-        $this->render('Assessments/index', ['title' => 'Evaluaciones', 'assessments' => $this->service->all()]);
+        $assessments = Auth::hasRole('ADMIN')
+            ? $this->service->all()
+            : $this->service->forTeacher((int) Auth::id());
+        $this->render('Assessments/index', ['title' => 'Evaluaciones', 'assessments' => $assessments]);
     }
 
     public function create(): void

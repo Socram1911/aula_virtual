@@ -60,6 +60,110 @@
     }
     document.addEventListener('DOMContentLoaded', initH5P);
 
+    // Seguimiento automático de visualización: registra que el estudiante "vio" un
+    // bloque cuando este entra en el viewport (al menos 60% visible). Se dispara una vez.
+    function initContentTracking() {
+        var blocks = document.querySelectorAll('[data-track-block]');
+        if (!blocks.length || typeof IntersectionObserver === 'undefined') {
+            return;
+        }
+        var observer = new IntersectionObserver(function (entries) {
+            entries.forEach(function (entry) {
+                if (entry.isIntersecting && !entry.target.dataset.tracked) {
+                    entry.target.dataset.tracked = '1';
+                    window.AV.post('/api/progress/view', {
+                        block_id: parseInt(entry.target.dataset.trackBlock, 10)
+                    }).catch(function () { /* sin conexión u otro error: se ignora */ });
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.6 });
+
+        blocks.forEach(function (b) { observer.observe(b); });
+    }
+
+    // Seguimiento de videos de YouTube mediante la IFrame API:
+    // registra inicio, avance (porcentaje) y finalización.
+    function initYouTubeTracking() {
+        var players = {};
+        var started = {};
+        var lastSent = {};
+
+        function fire(blockId, event, percent) {
+            window.AV.post('/api/progress/video', {
+                block_id: parseInt(blockId, 10),
+                event: event,
+                percent: percent || 0
+            }).catch(function () { /* ignora */ });
+        }
+
+        function bind(iframe) {
+            var blockId = iframe.dataset.blockId;
+            if (!blockId || players[blockId]) {
+                return;
+            }
+            players[blockId] = new YT.Player(iframe, {
+                events: {
+                    onStateChange: function (event) {
+                        var player = players[blockId];
+                        if (event.data === YT.PlayerState.PLAYING) {
+                            if (!started[blockId]) {
+                                started[blockId] = true;
+                                fire(blockId, 'video_started');
+                            }
+                            // Mide avance cada 5 s y reporta cambios >= 5%.
+                            player.__timer = setInterval(function () {
+                                var dur = player.getDuration();
+                                var cur = player.getCurrentTime();
+                                if (dur > 0) {
+                                    var pct = Math.round((cur / dur) * 100);
+                                    if (!lastSent[blockId] || pct - lastSent[blockId] >= 5 || pct === 100) {
+                                        lastSent[blockId] = pct;
+                                        fire(blockId, 'video_progress', pct);
+                                    }
+                                }
+                            }, 5000);
+                        } else if (event.data === YT.PlayerState.ENDED) {
+                            if (player.__timer) {
+                                clearInterval(player.__timer);
+                            }
+                            fire(blockId, 'video_completed', 100);
+                        } else {
+                            // Pausa u otro estado: detiene el temporizador de avance.
+                            if (player.__timer) {
+                                clearInterval(player.__timer);
+                                player.__timer = null;
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function ready() {
+            document.querySelectorAll('iframe.yt-tracked').forEach(bind);
+        }
+
+        var iframes = document.querySelectorAll('iframe.yt-tracked');
+        if (!iframes.length) {
+            return;
+        }
+
+        if (window.YT && window.YT.Player) {
+            ready();
+        } else {
+            window.onYouTubeIframeAPIReady = ready;
+            var tag = document.createElement('script');
+            tag.src = 'https://www.youtube.com/iframe_api';
+            document.head.appendChild(tag);
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        initContentTracking();
+        initYouTubeTracking();
+    });
+
     // Actividades interactivas: envío y retroalimentación inmediata.
     document.addEventListener('click', async function (ev) {
         const btn = ev.target.closest('.activity-submit');

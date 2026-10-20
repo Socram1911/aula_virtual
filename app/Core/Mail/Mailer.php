@@ -7,26 +7,30 @@ namespace App\Core\Mail;
 /**
  * Envío de correos transaccionales mediante la API de Resend (resend.com).
  *
- * Configuración requerida en .env:
+ * Configuración en .env:
  *   RESEND_API_KEY=re_xxxx
- *   RESEND_FROM="Aula Virtual Académica <no-reply@tu-dominio.com>"
+ *   RESEND_FROM="Aula Virtual Académica <onboarding@resend.dev>"
  *
- * Si RESEND_API_KEY no está configurada, send() devuelve false (sin lanzar excepción)
- * para que los flujos sigan funcionando en desarrollo sin un proveedor de correo.
+ * Devuelve siempre un arreglo [ok, message, id] para que el llamador pueda
+ * informar al usuario qué ocurrió (nunca falla en silencio).
  */
 final class Mailer
 {
     private const ENDPOINT = 'https://api.resend.com/emails';
 
-    /** Envía un correo. Devuelve true si fue aceptado por Resend, false en caso contrario. */
-    public static function send(string $to, string $subject, string $html, string $text = ''): bool
+    /**
+     * Envía un correo.
+     *
+     * @return array{ok: bool, message: string, id: ?string}
+     */
+    public static function send(string $to, string $subject, string $html, string $text = ''): array
     {
         $apiKey = (string) config('RESEND_API_KEY', '');
         if ($apiKey === '') {
-            return false;
+            return ['ok' => false, 'message' => 'RESEND_API_KEY no está configurada en .env', 'id' => null];
         }
 
-        $from = (string) config('RESEND_FROM', 'Aula Virtual Académica <no-reply@resend.dev>');
+        $from = (string) config('RESEND_FROM', 'Aula Virtual Académica <onboarding@resend.dev>');
         $payload = [
             'from' => $from,
             'to' => [$to],
@@ -35,14 +39,25 @@ final class Mailer
             'text' => $text !== '' ? $text : strip_tags($html),
         ];
 
-        return self::post($apiKey, $payload);
+        $result = self::post($apiKey, $payload);
+
+        if ($result['status'] >= 200 && $result['status'] < 300) {
+            $id = self::extractId($result['body']);
+            return ['ok' => true, 'message' => 'Correo enviado.', 'id' => $id];
+        }
+
+        return [
+            'ok' => false,
+            'message' => self::extractErrorMessage($result['body'], $result['status']),
+            'id' => null,
+        ];
     }
 
-    private static function post(string $apiKey, array $payload): bool
+    /** @return array{status: int, body: string} */
+    private static function post(string $apiKey, array $payload): array
     {
         $json = json_encode($payload, JSON_UNESCAPED_UNICODE);
 
-        // Preferencia: ext-curl.
         if (function_exists('curl_init')) {
             $ch = curl_init(self::ENDPOINT);
             curl_setopt_array($ch, [
@@ -56,18 +71,20 @@ final class Mailer
                 CURLOPT_TIMEOUT => 15,
             ]);
             $response = curl_exec($ch);
+            if ($response === false) {
+                $error = curl_error($ch);
+                curl_close($ch);
+                return ['status' => 0, 'body' => 'Error de conexión: ' . $error];
+            }
             $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
             curl_close($ch);
-
-            return $status >= 200 && $status < 300 && $response !== false;
+            return ['status' => $status, 'body' => (string) $response];
         }
 
-        // Respaldo: streams (require allow_url_fopen).
         $context = stream_context_create([
             'http' => [
                 'method' => 'POST',
-                'header' => "Authorization: Bearer {$apiKey}\r\n"
-                    . "Content-Type: application/json\r\n",
+                'header' => "Authorization: Bearer {$apiKey}\r\nContent-Type: application/json\r\n",
                 'content' => $json,
                 'timeout' => 15,
                 'ignore_errors' => true,
@@ -75,7 +92,7 @@ final class Mailer
         ]);
         $response = @file_get_contents(self::ENDPOINT, false, $context);
         if ($response === false) {
-            return false;
+            return ['status' => 0, 'body' => 'Error de conexión con la API de Resend.'];
         }
         $status = 0;
         foreach ($http_response_header ?? [] as $header) {
@@ -83,6 +100,24 @@ final class Mailer
                 $status = (int) $m[1];
             }
         }
-        return $status >= 200 && $status < 300;
+        return ['status' => $status, 'body' => (string) $response];
+    }
+
+    private static function extractId(string $body): ?string
+    {
+        $data = json_decode($body, true);
+        return is_array($data) && isset($data['id']) ? (string) $data['id'] : null;
+    }
+
+    private static function extractErrorMessage(string $body, int $status): string
+    {
+        $data = json_decode($body, true);
+        if (is_array($data)) {
+            $msg = (string) ($data['message'] ?? '');
+            if ($msg !== '') {
+                return "Resend ({$status}): {$msg}";
+            }
+        }
+        return "Resend devolvió un error ({$status}).";
     }
 }

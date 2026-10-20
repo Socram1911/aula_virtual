@@ -4,7 +4,7 @@ Plataforma web institucional de aula virtual: organiza el proceso educativo desd
 
 Arquitectura **MVC modular en PHP 8.x** (sin framework completo), **Bootstrap 5** + **JavaScript** (ES6+, sin React) en el frontend, y acceso a datos mediante **PDO** con sentencias preparadas.
 
-> **Nota sobre la base de datos**: el documento de diseño (SDD) especifica PostgreSQL como objetivo de producción. Para el **desarrollo local** se usa **MySQL/MariaDB** (decisión del usuario, ya que el entorno XAMPP provee `pdo_mysql`). La capa de acceso a datos está aislada en `app/Core/Database/Connection.php`, por lo que migrar a PostgreSQL solo requiere adaptar el DSN y el dialecto SQL del esquema.
+> **Nota sobre la base de datos**: el documento de diseño (SDD) especifica PostgreSQL como objetivo de producción. Para el **desarrollo local** se usa **MySQL/MariaDB** (el entorno XAMPP provee `pdo_mysql`). La aplicación soporta **ambos motores**: configura `DB_DRIVER=mysql` o `DB_DRIVER=pgsql`. Para desplegar con **Neon** (PostgreSQL serverless), consulta [DEPLOY.md](./DEPLOY.md).
 
 ## Requisitos
 

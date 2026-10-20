@@ -14,11 +14,11 @@ $isStudent = \App\Core\Auth\Auth::hasRole('STUDENT');
 <?php endif; ?>
 
 <?php foreach ($blocks as $b): ?>
-    <div class="card card-av mb-3">
+    <div class="card card-av mb-3" <?= $isStudent ? 'data-track-block="' . (int) $b->id . '"' : '' ?>>
         <div class="card-body">
             <?php if ($b->title): ?><h2 class="h6"><?= e($b->title) ?></h2><?php endif; ?>
             <?php $block = $b; include $blockView; ?>
-            <?php if ($isStudent && $b->type !== 'ACTIVITY' && $b->type !== 'ASSESSMENT'): ?>
+            <?php if ($isStudent && $b->type !== 'ACTIVITY' && $b->type !== 'ASSESSMENT' && $b->type !== 'VIDEO'): ?>
                 <button type="button" class="btn btn-sm btn-outline-success mt-2 mark-complete" data-block-id="<?= (int) $b->id ?>">✓ Marcar como completado</button>
             <?php endif; ?>
         </div>

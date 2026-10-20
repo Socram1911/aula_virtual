@@ -30,4 +30,17 @@ final class ReportController extends Controller
             'evaluationResults' => $this->service->evaluationResults(),
         ]);
     }
+
+    /** Seguimiento de visualización de contenido por unidad. */
+    public function unitContent(int $unitId): void
+    {
+        $this->requireRole(['ADMIN', 'TEACHER']);
+        $data = $this->service->unitContentProgress($unitId);
+        $this->render('Reports/unit_content', [
+            'title' => 'Seguimiento de contenido: ' . $data['unit']['title'],
+            'unit' => $data['unit'],
+            'blocks' => $data['blocks'],
+            'students' => $data['students'],
+        ]);
+    }
 }

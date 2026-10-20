@@ -15,6 +15,26 @@ final class AssessmentRepository
         return array_map([Assessment::class, 'fromArray'], $rows);
     }
 
+    /** Evaluaciones visibles para un docente (las de sus Saberes asignados). */
+    public function forTeacher(int $teacherId): array
+    {
+        $rows = Connection::fetchAll(
+            'SELECT DISTINCT a.*
+             FROM assessments a
+             LEFT JOIN saber_assignments sa ON sa.id = a.saber_assignment_id
+             LEFT JOIN units u ON u.id = a.unit_id
+             WHERE sa.id IN (SELECT saber_assignment_id FROM assignment_teachers WHERE teacher_id = :t)
+                OR u.saber_id IN (
+                    SELECT sa2.saber_id FROM saber_assignments sa2
+                    JOIN assignment_teachers at2 ON at2.saber_assignment_id = sa2.id
+                    WHERE at2.teacher_id = :t
+                )
+             ORDER BY a.id DESC',
+            [':t' => $teacherId]
+        );
+        return array_map([Assessment::class, 'fromArray'], $rows);
+    }
+
     public function find(int $id): ?Assessment
     {
         $row = Connection::fetch('SELECT * FROM assessments WHERE id = :id', [':id' => $id]);

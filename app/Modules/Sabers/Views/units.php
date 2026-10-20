@@ -25,6 +25,7 @@
                     <td><span class="badge <?= $u->status === 'PUBLISHED' ? 'bg-success' : 'bg-secondary' ?>"><?= e($u->status) ?></span></td>
                     <td class="text-end">
                         <a href="<?= url('/units/' . $u->id . '/edit') ?>" class="btn btn-sm btn-outline-primary">Contenido</a>
+                        <a href="<?= url('/reports/unit/' . $u->id) ?>" class="btn btn-sm btn-outline-info">Seguimiento</a>
                         <form method="post" action="<?= url('/units/' . $u->id . '/publish') ?>" class="d-inline">
                             <?= csrf_field() ?>
                             <button class="btn btn-sm btn-outline-<?= $u->status === 'PUBLISHED' ? 'warning' : 'success' ?>">
