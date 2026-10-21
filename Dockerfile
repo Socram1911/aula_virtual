@@ -4,6 +4,9 @@
 FROM php:8.2-apache
 
 # Dependencias del sistema para compilar extensiones.
+# Nota: NO se usa --auto-remove al purgar, porque eliminaría las librerías
+# de runtime (libpq5, libzip4, libxml2, libcurl4, libonig5) de las que dependen
+# las extensiones compiladas (pdo_pgsql, zip, simplexml, curl, mbstring).
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libpq-dev \
         libxml2-dev \
@@ -11,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libonig-dev \
         libzip-dev \
     && docker-php-ext-install pdo_pgsql opcache simplexml curl mbstring zip \
-    && apt-get purge -y --auto-remove libpq-dev libxml2-dev libcurl4-openssl-dev libonig-dev libzip-dev \
+    && apt-get purge -y libpq-dev libxml2-dev libcurl4-openssl-dev libonig-dev libzip-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Enrutado mediante .htaccess (RewriteEngine).
