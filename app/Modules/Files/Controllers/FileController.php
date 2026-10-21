@@ -23,16 +23,6 @@ final class FileController extends Controller
     {
         Auth::requireAuth();
         $file = $this->storage->find($id);
-        $path = $this->storage->absolutePath($file);
-        if (! is_file($path)) {
-            throw new \App\Core\Exceptions\HttpException(404, 'El archivo no está disponible.');
-        }
-
-        $inline = str_starts_with($file->mime_type, 'image/') || $file->mime_type === 'application/pdf';
-        header('Content-Type: ' . $file->mime_type);
-        header('Content-Length: ' . (string) filesize($path));
-        header('Content-Disposition: ' . ($inline ? 'inline' : 'attachment') . '; filename="' . $file->original_name . '"');
-        readfile($path);
-        exit;
+        $this->storage->stream($file);
     }
 }

@@ -338,3 +338,10 @@ CREATE TABLE IF NOT EXISTS content_view_logs (
     CONSTRAINT fk_cvl_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT fk_cvl_block FOREIGN KEY (block_id) REFERENCES content_blocks(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Sesiones en base de datos (necesarias en entornos con disco efímero, p. ej. Render).
+CREATE TABLE IF NOT EXISTS sessions (
+    id VARCHAR(128) NOT NULL PRIMARY KEY,
+    payload MEDIUMTEXT NOT NULL,
+    last_activity BIGINT NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

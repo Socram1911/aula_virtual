@@ -1,0 +1,12 @@
+.git
+.github
+.specify
+specs
+tests
+vendor
+storage
+.env
+*.log
+*.cache
+README.md
+phpunit.xml

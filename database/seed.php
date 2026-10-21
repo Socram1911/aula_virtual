@@ -30,11 +30,11 @@ $email = 'admin@aula.local';
 $stmt = $pdo->prepare('SELECT id FROM users WHERE email = :email');
 $stmt->execute([':email' => $email]);
 if (! $stmt->fetch()) {
-    $pdo->prepare(
-        'INSERT INTO users (first_name, last_name, email, password_hash, status) VALUES (?, ?, ?, ?, ?)'
-    )->execute(['Administrador', 'Sistema', $email, PasswordHasher::hash('admin123'), 'ACTIVE']);
+    $userId = Connection::insert(
+        'INSERT INTO users (first_name, last_name, email, password_hash, status) VALUES (?, ?, ?, ?, ?)',
+        ['Administrador', 'Sistema', $email, PasswordHasher::hash('admin123'), 'ACTIVE']
+    );
 
-    $userId = (int) $pdo->lastInsertId();
     $roleStmt = $pdo->prepare('SELECT id FROM roles WHERE name = ?');
     $roleStmt->execute(['ADMIN']);
     $roleId = (int) $roleStmt->fetchColumn();

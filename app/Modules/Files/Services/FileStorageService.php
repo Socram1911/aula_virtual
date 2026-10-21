@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Files\Services;
 
 use App\Core\Exceptions\HttpException;
+use App\Core\Storage\S3Storage;
 use App\Modules\Files\Models\File;
 use App\Modules\Files\Repositories\FileRepository;
 
@@ -36,10 +37,22 @@ final class FileStorageService
         return $file;
     }
 
-    public function absolutePath(File $file): string
+    /** Clave del objeto en R2 para un archivo dado. */
+    private function objectKey(File $file): string
     {
-        $base = dirname(__DIR__, 4) . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'uploads';
-        return $base . DIRECTORY_SEPARATOR . $file->stored_path;
+        return 'uploads/' . $file->stored_path;
+    }
+
+    /** Transmite el archivo desde R2 con control de acceso y termina el script. */
+    public function stream(File $file): void
+    {
+        $inline = str_starts_with($file->mime_type, 'image/') || $file->mime_type === 'application/pdf';
+        (new S3Storage())->stream(
+            $this->objectKey($file),
+            $file->mime_type,
+            $file->original_name,
+            $inline
+        );
     }
 
     /** Guarda un archivo subido y registra sus metadatos. Devuelve el File. */
@@ -59,12 +72,11 @@ final class FileStorageService
 
         $extension = self::ALLOWED_MIME[$mime];
         $storedName = bin2hex(random_bytes(16)) . '.' . $extension;
-        $base = dirname(__DIR__, 4) . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'uploads';
-        if (! is_dir($base)) {
-            mkdir($base, 0775, true);
-        }
-        $destination = $base . DIRECTORY_SEPARATOR . $storedName;
-        if (! move_uploaded_file($uploaded['tmp_name'], $destination)) {
+
+        try {
+            (new S3Storage())->put('uploads/' . $storedName, $uploaded['tmp_name'], $mime);
+        } catch (\Throwable $e) {
+            error_log('No se pudo subir el archivo a R2: ' . $e->getMessage());
             throw new HttpException(500, 'No se pudo almacenar el archivo.');
         }
 

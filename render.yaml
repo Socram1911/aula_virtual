@@ -1,0 +1,46 @@
+services:
+  - type: web
+    name: aula-virtual
+    runtime: docker
+    plan: free
+    healthCheckPath: /login
+    envVars:
+      - key: APP_NAME
+        value: Aula Virtual Académica
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_URL
+        value: https://aula-virtual.onrender.com
+      - key: DB_DRIVER
+        value: pgsql
+      - key: DB_PORT
+        value: "5432"
+      - key: DB_SSLMODE
+        value: require
+      - key: SESSION_NAME
+        value: aula_virtual_session
+      - key: R2_REGION
+        value: auto
+      # Secretos: se configuran en el panel de Render (no versionar valores reales).
+      - key: DB_HOST
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASS
+        sync: false
+      - key: R2_ENDPOINT
+        sync: false
+      - key: R2_ACCESS_KEY
+        sync: false
+      - key: R2_SECRET_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM
+        sync: false

@@ -6,7 +6,9 @@ namespace App\Modules\H5p\Controllers;
 
 use App\Core\Auth\Auth;
 use App\Core\Controller;
+use App\Core\Exceptions\HttpException;
 use App\Core\Session\Session;
+use App\Core\Storage\S3Storage;
 use App\Modules\H5p\Services\H5pService;
 
 final class H5pController extends Controller
@@ -35,41 +37,22 @@ final class H5pController extends Controller
         }, url('/units/' . $unitId . '/edit'));
     }
 
-    /** Sirve los archivos del paquete H5P (h5p.json, content.json, librerías…). */
+    /** Sirve los archivos del paquete H5P (h5p.json, content.json, librerías…) desde R2. */
     public function serve(int $id, string $path): void
     {
         Auth::requireAuth();
-        $target = $this->service->resolve($id, $path);
-        if ($target === null || ! is_file($target)) {
-            throw new \App\Core\Exceptions\HttpException(404, 'Archivo H5P no encontrado.');
+        $this->service->findBlock($id);
+
+        $relative = H5pService::normalizePath($path);
+        if ($relative === null) {
+            throw HttpException::notFound('Archivo H5P no encontrado.');
         }
 
-        $mime = $this->mime($target);
-        header('Content-Type: ' . $mime);
-        header('Content-Length: ' . (string) filesize($target));
-        if (in_array($mime, ['image/svg+xml', 'image/gif', 'image/png', 'image/jpeg'], true)) {
-            header('Content-Disposition: inline');
-        }
-        readfile($target);
-        exit;
-    }
-
-    private function mime(string $path): string
-    {
-        $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
-        return match ($ext) {
-            'json' => 'application/json',
-            'js' => 'application/javascript',
-            'css' => 'text/css',
-            'svg' => 'image/svg+xml',
-            'png' => 'image/png',
-            'jpg', 'jpeg' => 'image/jpeg',
-            'gif' => 'image/gif',
-            'woff' => 'font/woff',
-            'woff2' => 'font/woff2',
-            'mp3' => 'audio/mpeg',
-            'mp4' => 'video/mp4',
-            default => 'application/octet-stream',
-        };
+        (new S3Storage())->stream(
+            'h5p/' . $id . '/' . $relative,
+            H5pService::mimeFor($relative),
+            null,
+            true
+        );
     }
 }

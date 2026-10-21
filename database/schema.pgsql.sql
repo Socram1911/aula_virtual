@@ -294,3 +294,10 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     ip_address VARCHAR(45) NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Sesiones en base de datos (necesarias en entornos con disco efímero, p. ej. Render).
+CREATE TABLE IF NOT EXISTS sessions (
+    id VARCHAR(128) PRIMARY KEY,
+    payload TEXT NOT NULL,
+    last_activity BIGINT NOT NULL
+);

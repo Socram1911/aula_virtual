@@ -22,9 +22,32 @@ final class Session
             'path' => '/',
             'httponly' => true,
             'samesite' => 'Lax',
-            'secure' => isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
+            'secure' => self::isSecureRequest(),
         ]);
-        session_start();
+
+        try {
+            session_set_save_handler(new DatabaseSessionHandler(), true);
+            session_start();
+        } catch (\Throwable $e) {
+            // Si la base de datos no está disponible, se usa el manejador por
+            // defecto (archivos) para que la aplicación siga funcionando.
+            error_log('Sesión en base de datos no disponible; se usan archivos: ' . $e->getMessage());
+            if (session_status() === PHP_SESSION_ACTIVE) {
+                session_write_close();
+            }
+            session_set_save_handler(new \SessionHandler(), true);
+            session_start();
+        }
+    }
+
+    /** Detecta HTTPS incluso detrás de un proxy (Render, Cloudflare). */
+    private static function isSecureRequest(): bool
+    {
+        if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== '' && $_SERVER['HTTPS'] !== 'off') {
+            return true;
+        }
+
+        return ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https';
     }
 
     public static function get(string $key, mixed $default = null): mixed
