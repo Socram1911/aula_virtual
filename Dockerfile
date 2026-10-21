@@ -9,8 +9,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libxml2-dev \
         libcurl4-openssl-dev \
         libonig-dev \
-    && docker-php-ext-install pdo_pgsql opcache simplexml curl mbstring \
-    && apt-get purge -y --auto-remove libpq-dev libxml2-dev libcurl4-openssl-dev libonig-dev \
+        libzip-dev \
+    && docker-php-ext-install pdo_pgsql opcache simplexml curl mbstring zip \
+    && apt-get purge -y --auto-remove libpq-dev libxml2-dev libcurl4-openssl-dev libonig-dev libzip-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Enrutado mediante .htaccess (RewriteEngine).
