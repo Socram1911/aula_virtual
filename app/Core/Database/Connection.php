@@ -40,6 +40,16 @@ final class Connection
             if ($driver === 'pgsql') {
                 $sslmode = (string) config('DB_SSLMODE', 'require');
                 $dsn = "pgsql:host={$host};port={$port};dbname={$name};sslmode={$sslmode}";
+
+                // Neon: clientes con libpq antiguo (sin SNI) deben enviar el
+                // "endpoint id" (la primera parte del host) como opción.
+                $endpointId = (string) config('DB_ENDPOINT_ID', '');
+                if ($endpointId === '' && str_starts_with($host, 'ep-') && str_contains($host, '.')) {
+                    $endpointId = substr($host, 0, (int) strpos($host, '.'));
+                }
+                if ($endpointId !== '') {
+                    $dsn .= ";options=endpoint={$endpointId}";
+                }
             } else {
                 $dsn = "mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4";
             }
