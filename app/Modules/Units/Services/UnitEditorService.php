@@ -50,8 +50,11 @@ final class UnitEditorService
         }
 
         // Validación específica por tipo.
-        if ($type === 'VIDEO' && $content !== '' && ! preg_match('/^[A-Za-z0-9_-]{6,20}$/', $content)) {
-            throw HttpException::unprocessable('El identificador de video de YouTube es inválido.');
+        if ($type === 'VIDEO' && $content !== '') {
+            $content = self::normalizeYoutubeId($content);
+            if ($content === null) {
+                throw HttpException::unprocessable('El identificador de video de YouTube es inválido.');
+            }
         }
         if ($type === 'LINK' && $content !== '' && ! filter_var($content, FILTER_VALIDATE_URL)) {
             throw HttpException::unprocessable('La URL del enlace es inválida.');
@@ -83,8 +86,11 @@ final class UnitEditorService
             $content = HtmlSanitizer::clean($content);
         }
 
-        if ($block->type === 'VIDEO' && $content !== '' && ! preg_match('/^[A-Za-z0-9_-]{6,20}$/', $content)) {
-            throw HttpException::unprocessable('El identificador de video de YouTube es inválido.');
+        if ($block->type === 'VIDEO' && $content !== '') {
+            $content = self::normalizeYoutubeId($content);
+            if ($content === null) {
+                throw HttpException::unprocessable('El identificador de video de YouTube es inválido.');
+            }
         }
         if ($block->type === 'LINK' && $content !== '' && ! filter_var($content, FILTER_VALIDATE_URL)) {
             throw HttpException::unprocessable('La URL del enlace es inválida.');
@@ -158,5 +164,31 @@ final class UnitEditorService
         $status = $status === 'ACTIVE' ? 'ACTIVE' : 'INACTIVE';
         $this->repository->updateStatus($id, $status);
         AuditService::log('activar Bloque', 'ContentBlock', $id, ['status' => $block->status], ['status' => $status]);
+    }
+
+    /**
+     * Extrae el id de un video de YouTube a partir de un id directo o de una URL
+     * (watch?v=, youtu.be, embed, shorts, live). Devuelve null si no es válido.
+     */
+    private static function normalizeYoutubeId(string $value): ?string
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return null;
+        }
+
+        if (preg_match('/^[A-Za-z0-9_-]{6,20}$/', $value)) {
+            return $value;
+        }
+
+        if (preg_match(
+            '~(?:youtube\.com/(?:watch\?(?:[^&\s]*&)?v=|embed/|shorts/|live/)|youtu\.be/)([A-Za-z0-9_-]{6,20})~i',
+            $value,
+            $m
+        )) {
+            return $m[1];
+        }
+
+        return null;
     }
 }
