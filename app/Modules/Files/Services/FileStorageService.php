@@ -58,14 +58,15 @@ final class FileStorageService
     /** Guarda un archivo subido y registra sus metadatos. Devuelve el File. */
     public function store(array $uploaded, int $uploaderId): File
     {
-        if (($uploaded['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-            throw HttpException::unprocessable('Error al subir el archivo.');
+        $error = (int) ($uploaded['error'] ?? UPLOAD_ERR_NO_FILE);
+        if ($error !== UPLOAD_ERR_OK) {
+            throw HttpException::unprocessable(self::uploadErrorMessage($error));
         }
         if ($uploaded['size'] > self::MAX_SIZE) {
             throw HttpException::unprocessable('El archivo supera el tamaño máximo permitido (20 MB).');
         }
 
-        $mime = (string) ($uploaded['type'] ?? '');
+        $mime = self::detectMime($uploaded);
         if (! isset(self::ALLOWED_MIME[$mime])) {
             throw HttpException::unprocessable('Tipo de archivo no permitido. Se aceptan imágenes y PDF.');
         }
@@ -89,5 +90,67 @@ final class FileStorageService
         ]);
 
         return $this->find($id);
+    }
+
+    /**
+     * Determina el MIME del archivo subido. El tipo que envía el navegador no
+     * es confiable (puede venir vacío o como application/octet-stream), así que
+     * se valida contra el contenido real (finfo) y, como último recurso, contra
+     * la extensión del nombre original.
+     */
+    private static function detectMime(array $uploaded): string
+    {
+        $candidates = [];
+
+        $client = (string) ($uploaded['type'] ?? '');
+        if ($client !== '') {
+            $candidates[] = $client;
+        }
+
+        $tmp = (string) ($uploaded['tmp_name'] ?? '');
+        if ($tmp !== '' && is_file($tmp) && function_exists('finfo_open')) {
+            $finfo = @finfo_open(FILEINFO_MIME_TYPE);
+            if ($finfo !== false) {
+                $detected = @finfo_file($finfo, $tmp);
+                @finfo_close($finfo);
+                if (is_string($detected) && $detected !== '') {
+                    $candidates[] = $detected;
+                }
+            }
+        }
+
+        $ext = strtolower(pathinfo((string) ($uploaded['name'] ?? ''), PATHINFO_EXTENSION));
+        $byExtension = match ($ext) {
+            'jpg', 'jpeg' => 'image/jpeg',
+            'png' => 'image/png',
+            'gif' => 'image/gif',
+            'webp' => 'image/webp',
+            'pdf' => 'application/pdf',
+            default => null,
+        };
+        if ($byExtension !== null) {
+            $candidates[] = $byExtension;
+        }
+
+        foreach ($candidates as $mime) {
+            if (isset(self::ALLOWED_MIME[$mime])) {
+                return $mime;
+            }
+        }
+
+        // Ningún candidato es válido: se devuelve uno no permitido para que el
+        // llamador muestre el error de tipo no permitido.
+        return $candidates[0] ?? 'application/octet-stream';
+    }
+
+    private static function uploadErrorMessage(int $error): string
+    {
+        return match ($error) {
+            UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE => 'El archivo supera el límite de tamaño del servidor.',
+            UPLOAD_ERR_PARTIAL => 'El archivo se subió de forma incompleta. Intente nuevamente.',
+            UPLOAD_ERR_NO_TMP_DIR => 'No hay directorio temporal para procesar el archivo.',
+            UPLOAD_ERR_CANT_WRITE => 'No se pudo escribir el archivo en el servidor.',
+            default => 'Error al subir el archivo.',
+        };
     }
 }

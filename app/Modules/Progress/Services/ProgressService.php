@@ -18,7 +18,7 @@ final class ProgressService
             'INSERT INTO student_block_progress (student_id, block_id, status, completed_at, viewed_at)
              VALUES (:s, :b, :status, :at, :at)'
             . Connection::onConflict('student_id, block_id')
-            . 'status = :status, completed_at = COALESCE(completed_at, :at), viewed_at = COALESCE(viewed_at, :at)',
+            . 'status = :status, completed_at = COALESCE(student_block_progress.completed_at, :at), viewed_at = COALESCE(student_block_progress.viewed_at, :at)',
             [':s' => $studentId, ':b' => $blockId, ':status' => 'COMPLETED', ':at' => date('Y-m-d H:i:s')]
         );
 
@@ -45,7 +45,7 @@ final class ProgressService
             'INSERT INTO student_block_progress (student_id, block_id, status, viewed_at)
              VALUES (:s, :b, :st, :at)'
             . Connection::onConflict('student_id, block_id')
-            . 'viewed_at = COALESCE(viewed_at, :at), status = CASE WHEN status = :notstarted THEN :st ELSE status END',
+            . 'viewed_at = COALESCE(student_block_progress.viewed_at, :at), status = CASE WHEN student_block_progress.status = :notstarted THEN :st ELSE student_block_progress.status END',
             [
                 ':s' => $studentId,
                 ':b' => $blockId,
@@ -65,7 +65,7 @@ final class ProgressService
             'INSERT INTO student_block_progress (student_id, block_id, status, video_percent, viewed_at)
              VALUES (:s, :b, :st, :p, :at)'
             . Connection::onConflict('student_id, block_id')
-            . 'video_percent = GREATEST(COALESCE(video_percent, 0), :p), viewed_at = COALESCE(viewed_at, :at), status = CASE WHEN status = :notstarted THEN :st ELSE status END',
+            . 'video_percent = GREATEST(COALESCE(student_block_progress.video_percent, 0), :p), viewed_at = COALESCE(student_block_progress.viewed_at, :at), status = CASE WHEN student_block_progress.status = :notstarted THEN :st ELSE student_block_progress.status END',
             [
                 ':s' => $studentId,
                 ':b' => $blockId,

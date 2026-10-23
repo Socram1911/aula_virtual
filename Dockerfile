@@ -29,6 +29,14 @@ WORKDIR /var/www/html
 # Instala dependencias (aws-sdk-php) y genera el autoload optimizado.
 RUN composer install --no-dev --no-interaction --optimize-autoloader --no-progress
 
+# Límites de subida acordes a la aplicación (los PDF pueden llegar a 20 MB).
+RUN { \
+        echo 'upload_max_filesize=20M'; \
+        echo 'post_max_size=25M'; \
+        echo 'memory_limit=256M'; \
+        echo 'max_execution_time=120'; \
+    } > /usr/local/etc/php/conf.d/zz-aula-virtual.ini
+
 # Permite .htaccess y apunta el DocumentRoot a public/.
 RUN sed -ri 's!AllowOverride None!AllowOverride All!g' /etc/apache2/apache2.conf
 ENV APACHE_DOCUMENT_ROOT=/var/www/html/public

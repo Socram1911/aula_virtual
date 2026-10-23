@@ -52,7 +52,7 @@ $questionId = Connection::insert(
 Connection::run('INSERT INTO question_options (question_id, option_text, is_correct, position) VALUES (?, ?, ?, ?)', [$questionId, '4', 1, 0]);
 Connection::run('INSERT INTO question_options (question_id, option_text, is_correct, position) VALUES (?, ?, ?, ?)', [$questionId, '3', 0, 1]);
 
-$correctOptionId = (int) Connection::fetch('SELECT id FROM question_options WHERE question_id = ? AND is_correct = 1', [$questionId])['id'];
+$correctOptionId = (int) Connection::fetch('SELECT id FROM question_options WHERE question_id = ? AND is_correct = TRUE', [$questionId])['id'];
 
 try {
     // 1. Iniciar intento.

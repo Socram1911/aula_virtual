@@ -182,7 +182,7 @@ final class UnitEditorService
         }
 
         if (preg_match(
-            '~(?:youtube\.com/(?:watch\?(?:[^&\s]*&)?v=|embed/|shorts/|live/)|youtu\.be/)([A-Za-z0-9_-]{6,20})~i',
+            '~(?:youtube(?:-nocookie)?\.com/(?:watch\?(?:[^&\s]*&)*v=|embed/|v/|shorts/|live/)|youtu\.be/)([A-Za-z0-9_-]{6,20})~i',
             $value,
             $m
         )) {
