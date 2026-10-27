@@ -16,7 +16,7 @@ final class ReportService
              JOIN academic_periods p ON p.id = s.academic_period_id
              JOIN tracks t ON t.id = s.track_id
              LEFT JOIN section_students ss ON ss.section_id = s.id AND ss.status = :enr
-             GROUP BY s.id, p.name, t.name, s.number
+             GROUP BY s.id, s.number, p.id, p.name, t.id, t.name, t.position
              ORDER BY p.id DESC, t.position, s.number',
             [':enr' => 'ENROLLED']
         );

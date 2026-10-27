@@ -12,7 +12,7 @@ services:
       - key: APP_DEBUG
         value: "false"
       - key: APP_URL
-        value: https://aula-virtual.onrender.com
+        value: https://aulavirtual.lat
       - key: DB_DRIVER
         value: pgsql
       - key: DB_PORT
