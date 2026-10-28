@@ -60,8 +60,10 @@
                 ajax: {
                     setFinishedUrl: '/api/h5p/' + blockId + '/result'
                 }
-            }).catch(function () {
-                el.innerHTML = '<div class="alert alert-danger small">No se pudo cargar el contenido interactivo H5P.</div>';
+            }).catch(function (err) {
+                console.error('No se pudo cargar el contenido H5P:', err);
+                el.innerHTML = '<div class="alert alert-danger small">No se pudo cargar el contenido interactivo H5P. ' +
+                    '<small class="d-block text-muted">' + (err && err.message ? err.message : '') + '</small></div>';
             });
         });
     }

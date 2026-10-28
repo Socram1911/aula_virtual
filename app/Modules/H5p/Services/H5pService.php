@@ -88,26 +88,21 @@ final class H5pService
                 throw HttpException::unprocessable('El archivo .h5p no es un paquete válido.');
             }
 
-            // 2) Validar que contenga el manifiesto h5p.json.
-            $files = $this->listFiles($tempDir);
-            $hasManifest = false;
-            foreach ($files as $relative) {
-                if (basename($relative) === 'h5p.json') {
-                    $hasManifest = true;
-                    break;
-                }
-            }
-            if (! $hasManifest) {
+            // 2) Localizar la raíz del contenido (el directorio que contiene
+            //    h5p.json). Algunos paquetes .h5p llevan una carpeta superior;
+            //    se aplanan para que el reproductor encuentre h5p.json en la base.
+            $root = $this->findContentRoot($tempDir);
+            if ($root === null) {
                 $this->blocks->delete($blockId);
                 throw HttpException::unprocessable('El paquete .h5p no contiene h5p.json (archivo inválido).');
             }
 
-            // 3) Subir cada archivo a R2.
+            // 3) Subir cada archivo a R2 con claves relativas a la raíz.
             try {
-                foreach ($files as $relative) {
+                foreach ($this->listFiles($root) as $relative) {
                     $storage->put(
                         $prefix . '/' . $relative,
-                        $tempDir . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relative),
+                        $root . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relative),
                         self::mimeFor($relative)
                     );
                 }
@@ -225,6 +220,35 @@ final class H5pService
             $files[] = str_replace('\\', '/', substr($file->getPathname(), strlen($dir) + 1));
         }
         return $files;
+    }
+
+    /**
+     * Localiza el directorio raíz del contenido H5P: el que contiene h5p.json.
+     * Devuelve null si no existe h5p.json. Si h5p.json está bajo una única
+     * carpeta superior, devuelve esa carpeta (aplana la estructura).
+     */
+    private function findContentRoot(string $dir): ?string
+    {
+        $files = $this->listFiles($dir);
+        $relative = null;
+        foreach ($files as $f) {
+            if (basename($f) === 'h5p.json') {
+                $relative = $f;
+                break;
+            }
+        }
+        if ($relative === null) {
+            return null;
+        }
+        if ($relative === 'h5p.json') {
+            return $dir;
+        }
+        // h5p.json bajo una única carpeta: se aplana esa carpeta.
+        $parts = explode('/', $relative);
+        if (count($parts) === 2) {
+            return $dir . DIRECTORY_SEPARATOR . $parts[0];
+        }
+        return null;
     }
 
     /**
