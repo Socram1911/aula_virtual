@@ -75,10 +75,14 @@ final class H5pService
         }
 
         try {
-            // 1) Abrir y extraer el paquete (valida que sea un ZIP válido).
+            // 1) Extraer el paquete (valida que sea un ZIP válido).
+            //    Nota: el tmp_name de la subida no tiene extensión .zip, por lo
+            //    que PharData no puede abrirlo directamente; se copia a un
+            //    archivo con extensión (o se usa ZipArchive si está disponible).
             try {
-                $phar = new \PharData($uploaded['tmp_name'], 0, null, \Phar::ZIP);
-                $phar->extractTo($tempDir, null, true);
+                $this->extractPackage($uploaded['tmp_name'], $tempDir);
+            } catch (HttpException $e) {
+                throw $e;
             } catch (\Throwable $e) {
                 $this->blocks->delete($blockId);
                 throw HttpException::unprocessable('El archivo .h5p no es un paquete válido.');
@@ -221,6 +225,42 @@ final class H5pService
             $files[] = str_replace('\\', '/', substr($file->getPathname(), strlen($dir) + 1));
         }
         return $files;
+    }
+
+    /**
+     * Extrae el contenido de un paquete .h5p (ZIP) al directorio indicado.
+     *
+     * Prefiere ZipArchive (más estándar); si no está disponible, copia el
+     * archivo temporal a un nombre .zip y usa PharData (que requiere extensión
+     * para detectar el formato).
+     */
+    private function extractPackage(string $source, string $destDir): void
+    {
+        if (class_exists(\ZipArchive::class)) {
+            $zip = new \ZipArchive();
+            $res = $zip->open($source);
+            if ($res !== true) {
+                throw new \RuntimeException("ZipArchive::open falló con código {$res}");
+            }
+            if (! $zip->extractTo($destDir)) {
+                $zip->close();
+                throw new \RuntimeException('ZipArchive::extractTo falló');
+            }
+            $zip->close();
+            return;
+        }
+
+        // Fallback con PharData: requiere un archivo con extensión .zip.
+        $zipPath = $destDir . DIRECTORY_SEPARATOR . 'package.zip';
+        if (! copy($source, $zipPath)) {
+            throw new \RuntimeException('No se pudo copiar el archivo temporal del paquete.');
+        }
+        try {
+            $phar = new \PharData($zipPath);
+            $phar->extractTo($destDir, null, true);
+        } finally {
+            @unlink($zipPath);
+        }
     }
 
     /** Elimina un directorio y su contenido de forma recursiva. */
