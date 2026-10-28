@@ -219,7 +219,7 @@ CREATE TABLE IF NOT EXISTS grade_components (
     id BIGSERIAL PRIMARY KEY,
     saber_assignment_id BIGINT NOT NULL REFERENCES saber_assignments(id) ON DELETE CASCADE,
     name VARCHAR(150) NOT NULL,
-    source_type VARCHAR(20) NOT NULL CHECK (source_type IN ('ACTIVITIES','ASSESSMENTS','PROJECT')),
+    source_type VARCHAR(20) NOT NULL CHECK (source_type IN ('ACTIVITIES','ASSESSMENTS','PROJECT','H5P')),
     weight NUMERIC(5,2) NOT NULL DEFAULT 0,
     position INTEGER NOT NULL DEFAULT 0
 );
@@ -228,7 +228,7 @@ CREATE TABLE IF NOT EXISTS grades (
     id BIGSERIAL PRIMARY KEY,
     saber_assignment_id BIGINT NOT NULL REFERENCES saber_assignments(id) ON DELETE CASCADE,
     student_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    source_type VARCHAR(20) NOT NULL CHECK (source_type IN ('ACTIVITY','ASSESSMENT','MANUAL','COMPOSITE')),
+    source_type VARCHAR(20) NOT NULL CHECK (source_type IN ('ACTIVITY','ASSESSMENT','MANUAL','COMPOSITE','H5P')),
     source_id BIGINT NULL,
     score NUMERIC(10,2) NOT NULL,
     percentage NUMERIC(5,2) NOT NULL DEFAULT 0,
@@ -301,3 +301,9 @@ CREATE TABLE IF NOT EXISTS sessions (
     payload TEXT NOT NULL,
     last_activity BIGINT NOT NULL
 );
+
+-- Calificaciones H5P: amplía los CHECK existentes (idempotente) para bases ya creadas.
+ALTER TABLE grades DROP CONSTRAINT IF EXISTS grades_source_type_check;
+ALTER TABLE grades ADD CONSTRAINT grades_source_type_check CHECK (source_type IN ('ACTIVITY','ASSESSMENT','MANUAL','COMPOSITE','H5P'));
+ALTER TABLE grade_components DROP CONSTRAINT IF EXISTS grade_components_source_type_check;
+ALTER TABLE grade_components ADD CONSTRAINT grade_components_source_type_check CHECK (source_type IN ('ACTIVITIES','ASSESSMENTS','PROJECT','H5P'));

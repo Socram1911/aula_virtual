@@ -20,10 +20,20 @@ abstract class Controller
     public function __construct()
     {
         $this->request = Request::capture();
-        if ($this->request->isPost()) {
+        if ($this->request->isPost() && ! $this->csrfExempt()) {
             $token = $this->request->input('_token') ?? ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? null);
             Csrf::validate($token);
         }
+    }
+
+    /**
+     * Indica si una acción POST está exenta de validación CSRF (por defecto no).
+     * Se sobrescribe en casos concretos donde el cliente no puede enviar el token
+     * (p. ej. la devolución de resultados H5P desde su iframe).
+     */
+    protected function csrfExempt(): bool
+    {
+        return false;
     }
 
     /** Renderiza una vista dentro del layout. La vista se indica como 'Modulo/vista'. */

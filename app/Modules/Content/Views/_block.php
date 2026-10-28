@@ -31,6 +31,7 @@ switch ($block->type) {
         break;
     case 'H5P':
         echo '<div class="h5p-container w-100"'
+            . ' data-block-id="' . (int) $block->id . '"'
             . ' data-h5p-path="' . e(url('/h5p/' . (int) $block->id)) . '"'
             . ' data-frame-js="' . e(url('/assets/h5p-standalone/frame.bundle.js')) . '"'
             . ' data-frame-css="' . e(url('/assets/h5p-standalone/styles/h5p.css')) . '">'

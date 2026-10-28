@@ -247,7 +247,7 @@ CREATE TABLE IF NOT EXISTS grade_components (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     saber_assignment_id INT UNSIGNED NOT NULL,
     name VARCHAR(150) NOT NULL,
-    source_type ENUM('ACTIVITIES','ASSESSMENTS','PROJECT') NOT NULL,
+    source_type ENUM('ACTIVITIES','ASSESSMENTS','PROJECT','H5P') NOT NULL,
     weight DECIMAL(5,2) NOT NULL DEFAULT 0.00,
     position INT NOT NULL DEFAULT 0,
     CONSTRAINT fk_gc_assignment FOREIGN KEY (saber_assignment_id) REFERENCES saber_assignments(id) ON DELETE CASCADE
@@ -257,7 +257,7 @@ CREATE TABLE IF NOT EXISTS grades (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     saber_assignment_id INT UNSIGNED NOT NULL,
     student_id INT UNSIGNED NOT NULL,
-    source_type ENUM('ACTIVITY','ASSESSMENT','MANUAL','COMPOSITE') NOT NULL,
+    source_type ENUM('ACTIVITY','ASSESSMENT','MANUAL','COMPOSITE','H5P') NOT NULL,
     source_id INT UNSIGNED NULL,
     score DECIMAL(10,2) NOT NULL,
     percentage DECIMAL(5,2) NOT NULL DEFAULT 0.00,
@@ -345,3 +345,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     payload MEDIUMTEXT NOT NULL,
     last_activity BIGINT NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Calificaciones H5P: amplía los ENUM existentes (idempotente) para bases ya creadas.
+ALTER TABLE grade_components MODIFY COLUMN source_type ENUM('ACTIVITIES','ASSESSMENTS','PROJECT','H5P') NOT NULL;
+ALTER TABLE grades MODIFY COLUMN source_type ENUM('ACTIVITY','ASSESSMENT','MANUAL','COMPOSITE','H5P') NOT NULL;

@@ -21,6 +21,16 @@ final class H5pController extends Controller
         $this->service = new H5pService();
     }
 
+    /**
+     * La devolución de resultados H5P llega desde el iframe del reproductor
+     * (jQuery.post, form-urlencoded) sin cabecera CSRF; la acción valida la
+     * sesión y el rol STUDENT por su cuenta.
+     */
+    protected function csrfExempt(): bool
+    {
+        return (bool) preg_match('#^/api/h5p/\d+/result$#', $this->request->path());
+    }
+
     /** Sube un paquete .h5p y crea el bloque dentro de la unidad. */
     public function store(int $unitId): void
     {
@@ -54,5 +64,30 @@ final class H5pController extends Controller
             null,
             true
         );
+    }
+
+    /**
+     * API: registra el resultado de un bloque H5P.
+     *
+     * El runtime H5P llama a setFinishedUrl (vía jQuery.post, form-urlencoded)
+     * con {contentId, score, maxScore, ...} solo cuando el contenido se completa
+     * y tiene puntaje. El servidor acota los valores y calcula el porcentaje.
+     */
+    public function result(int $id): void
+    {
+        Auth::requireRole('STUDENT');
+
+        $score = (float) ($this->request->input('score', 0));
+        $maxScore = (float) ($this->request->input('maxScore', 0));
+
+        if ($score < 0) {
+            $score = 0.0;
+        }
+        if ($maxScore > 0 && $score > $maxScore) {
+            $score = $maxScore;
+        }
+
+        $result = $this->service->recordResult((int) Auth::id(), $id, $score, $maxScore);
+        $this->json(['data' => $result]);
     }
 }

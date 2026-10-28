@@ -71,7 +71,12 @@ final class GradeService
         if ($components) {
             $total = 0.0;
             foreach ($components as $c) {
-                $sourceType = $c['source_type'] === 'ACTIVITIES' ? 'ACTIVITY' : ($c['source_type'] === 'ASSESSMENTS' ? 'ASSESSMENT' : 'PROJECT');
+                $sourceType = match ($c['source_type']) {
+                    'ACTIVITIES' => 'ACTIVITY',
+                    'ASSESSMENTS' => 'ASSESSMENT',
+                    'H5P' => 'H5P',
+                    default => 'PROJECT',
+                };
                 $avg = $this->averagePercentage($saberAssignmentId, $studentId, $sourceType);
                 $total += $avg * ((float) $c['weight'] / 100);
             }
@@ -88,6 +93,12 @@ final class GradeService
         $percentage = $this->computeComposite($saberAssignmentId, $studentId);
         $this->record($saberAssignmentId, $studentId, 'COMPOSITE', null, $percentage, $percentage);
         return $percentage;
+    }
+
+    /** Registra el resultado de un bloque H5P (fuente H5P). */
+    public function recordH5p(int $saberAssignmentId, int $studentId, int $blockId, float $score, float $percentage): void
+    {
+        $this->record($saberAssignmentId, $studentId, 'H5P', $blockId, $score, $percentage);
     }
 
     private function averagePercentage(int $assignmentId, int $studentId, string $sourceType): float
@@ -155,7 +166,7 @@ final class GradeService
                 $name = trim((string) ($c['name'] ?? ''));
                 $type = strtoupper((string) ($c['source_type'] ?? ''));
                 $weight = (float) ($c['weight'] ?? 0);
-                if ($name !== '' && $weight > 0 && in_array($type, ['ACTIVITIES', 'ASSESSMENTS', 'PROJECT'], true)) {
+                if ($name !== '' && $weight > 0 && in_array($type, ['ACTIVITIES', 'ASSESSMENTS', 'PROJECT', 'H5P'], true)) {
                     $stmt->execute([$assignmentId, $name, $type, $weight, $position++]);
                 }
             }

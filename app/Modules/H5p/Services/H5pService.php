@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace App\Modules\H5p\Services;
 
+use App\Core\Database\Connection;
 use App\Core\Exceptions\HttpException;
 use App\Core\Storage\S3Storage;
 use App\Modules\Content\Models\ContentBlock;
 use App\Modules\Content\Repositories\ContentBlockRepository;
+use App\Modules\Grades\Services\GradeService;
+use App\Modules\Progress\Services\ProgressService;
 
 /**
  * Reproducción nativa de contenido interactivo H5P.
@@ -21,10 +24,14 @@ final class H5pService
     private const MAX_SIZE = 100 * 1024 * 1024; // 100 MB
 
     private ContentBlockRepository $blocks;
+    private ProgressService $progress;
+    private GradeService $grades;
 
     public function __construct()
     {
         $this->blocks = new ContentBlockRepository();
+        $this->progress = new ProgressService();
+        $this->grades = new GradeService();
     }
 
     /**
@@ -58,40 +65,54 @@ final class H5pService
         $storage = new S3Storage();
         $prefix = 'h5p/' . $blockId;
 
-        // Se extrae a un directorio temporal y luego cada archivo se sube a R2.
-        // El temporal es efímero y se limpia al terminar; R2 queda como fuente única.
+        // Se extrae a un directorio temporal, se valida y luego cada archivo se
+        // sube a R2. El temporal es efímero y se limpia al terminar; R2 queda
+        // como fuente única.
         $tempDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'h5p_' . bin2hex(random_bytes(8));
         if (! mkdir($tempDir, 0775, true) && ! is_dir($tempDir)) {
+            $this->blocks->delete($blockId);
             throw new HttpException(500, 'No se pudo preparar el directorio temporal para el contenido H5P.');
         }
 
         try {
-            $phar = new \PharData($uploaded['tmp_name'], 0, null, \Phar::ZIP);
-            $phar->extractTo($tempDir, null, true);
-
-            $hasManifest = false;
-            foreach ($this->listFiles($tempDir) as $relative) {
-                if ($relative === 'h5p.json') {
-                    $hasManifest = true;
-                }
-                $storage->put(
-                    $prefix . '/' . $relative,
-                    $tempDir . DIRECTORY_SEPARATOR . $relative,
-                    self::mimeFor($relative)
-                );
+            // 1) Abrir y extraer el paquete (valida que sea un ZIP válido).
+            try {
+                $phar = new \PharData($uploaded['tmp_name'], 0, null, \Phar::ZIP);
+                $phar->extractTo($tempDir, null, true);
+            } catch (\Throwable $e) {
+                $this->blocks->delete($blockId);
+                throw HttpException::unprocessable('El archivo .h5p no es un paquete válido.');
             }
 
+            // 2) Validar que contenga el manifiesto h5p.json.
+            $files = $this->listFiles($tempDir);
+            $hasManifest = false;
+            foreach ($files as $relative) {
+                if (basename($relative) === 'h5p.json') {
+                    $hasManifest = true;
+                    break;
+                }
+            }
             if (! $hasManifest) {
+                $this->blocks->delete($blockId);
                 throw HttpException::unprocessable('El paquete .h5p no contiene h5p.json (archivo inválido).');
             }
-        } catch (HttpException $e) {
-            $storage->deletePrefix($prefix);
-            $this->blocks->delete($blockId);
-            throw $e;
-        } catch (\Throwable $e) {
-            $storage->deletePrefix($prefix);
-            $this->blocks->delete($blockId);
-            throw HttpException::unprocessable('El archivo .h5p no es un paquete válido.');
+
+            // 3) Subir cada archivo a R2.
+            try {
+                foreach ($files as $relative) {
+                    $storage->put(
+                        $prefix . '/' . $relative,
+                        $tempDir . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relative),
+                        self::mimeFor($relative)
+                    );
+                }
+            } catch (\Throwable $e) {
+                error_log('No se pudo subir el contenido H5P a R2: ' . $e->getMessage());
+                $storage->deletePrefix($prefix);
+                $this->blocks->delete($blockId);
+                throw new HttpException(500, 'No se pudo almacenar el contenido H5P.');
+            }
         } finally {
             $this->deleteDirectory($tempDir);
         }
@@ -106,6 +127,44 @@ final class H5pService
             throw HttpException::notFound('Contenido H5P no encontrado.');
         }
         return $block;
+    }
+
+    /**
+     * Registra el resultado de un bloque H5P: si hay puntaje, guarda la
+     * calificación (fuente H5P) en cada asignación del estudiante para el Saber
+     * de la unidad y recalcula la compuesta. En todos los casos (el runtime solo
+     * notifica al completar) marca el progreso del bloque como completado.
+     *
+     * @return array{percentage: float, graded: bool, assignments: int}
+     */
+    public function recordResult(int $studentId, int $blockId, float $score, float $maxScore): array
+    {
+        $block = $this->findBlock($blockId);
+
+        $unit = Connection::fetch('SELECT saber_id FROM units WHERE id = :id', [':id' => $block->unit_id]);
+        if ($unit === null) {
+            throw HttpException::notFound('Unidad no encontrada.');
+        }
+
+        $graded = $maxScore > 0;
+        $percentage = $graded ? round(($score / $maxScore) * 100, 2) : 0.0;
+
+        $assignments = $this->progress->assignmentsForSaber($studentId, (int) $unit['saber_id']);
+
+        foreach ($assignments as $assignmentId) {
+            if ($graded) {
+                $this->grades->recordH5p($assignmentId, $studentId, $blockId, $score, $percentage);
+                $this->grades->recordComposite($assignmentId, $studentId);
+            }
+        }
+
+        $this->progress->markBlockCompleted($studentId, $blockId);
+
+        return [
+            'percentage' => $percentage,
+            'graded' => $graded,
+            'assignments' => count($assignments),
+        ];
     }
 
     /** MIME a partir de la extensión del archivo del paquete H5P. */

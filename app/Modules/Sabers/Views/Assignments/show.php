@@ -42,6 +42,7 @@
                                         <option value="ACTIVITIES" <?= selected($c['source_type'], 'ACTIVITIES') ?>>Actividades</option>
                                         <option value="ASSESSMENTS" <?= selected($c['source_type'], 'ASSESSMENTS') ?>>Evaluaciones</option>
                                         <option value="PROJECT" <?= selected($c['source_type'], 'PROJECT') ?>>Proyecto</option>
+                                        <option value="H5P" <?= selected($c['source_type'], 'H5P') ?>>H5P</option>
                                     </select>
                                 </div>
                                 <div class="col-4"><input type="number" step="0.01" name="components[<?= $i ?>][weight]" class="form-control form-control-sm" value="<?= e($c['weight']) ?>" placeholder="%"></div>
@@ -93,7 +94,7 @@ document.getElementById('add-component').addEventListener('click', function () {
     row.className = 'row g-2 mb-2';
     row.innerHTML = '<div class="col-4"><input type="text" name="components[' + idx + '][name]" class="form-control form-control-sm" placeholder="Nombre"></div>' +
         '<div class="col-4"><select name="components[' + idx + '][source_type]" class="form-select form-select-sm">' +
-        '<option value="ACTIVITIES">Actividades</option><option value="ASSESSMENTS">Evaluaciones</option><option value="PROJECT">Proyecto</option></select></div>' +
+        '<option value="ACTIVITIES">Actividades</option><option value="ASSESSMENTS">Evaluaciones</option><option value="PROJECT">Proyecto</option><option value="H5P">H5P</option></select></div>' +
         '<div class="col-4"><input type="number" step="0.01" name="components[' + idx + '][weight]" class="form-control form-control-sm" placeholder="%"></div>';
     container.appendChild(row);
 });

@@ -49,10 +49,17 @@
                 return;
             }
             el.dataset.initialized = '1';
+            var blockId = el.dataset.blockId;
             new window.H5PStandalone.H5P(el, {
                 h5pJsonPath: el.dataset.h5pPath,
                 frameJs: el.dataset.frameJs,
-                frameCss: el.dataset.frameCss
+                frameCss: el.dataset.frameCss,
+                // El runtime informa el resultado (score/maxScore) a este endpoint
+                // cuando el contenido se completa; el servidor registra la nota.
+                postUserStatistics: true,
+                ajax: {
+                    setFinishedUrl: '/api/h5p/' + blockId + '/result'
+                }
             }).catch(function () {
                 el.innerHTML = '<div class="alert alert-danger small">No se pudo cargar el contenido interactivo H5P.</div>';
             });
