@@ -97,9 +97,22 @@ final class H5pService
                 throw HttpException::unprocessable('El paquete .h5p no contiene h5p.json (archivo inválido).');
             }
 
+            // 2b) Validar que el paquete sea autocontenido: debe incluir todas
+            //     las librerías declaradas en preloadedDependencies. Si no, el
+            //     reproductor no podrá cargarlo (error 404 en library.json).
+            $files = $this->listFiles($root);
+            $missing = $this->missingLibraries($root, $files);
+            if ($missing !== []) {
+                $this->blocks->delete($blockId);
+                throw HttpException::unprocessable(
+                    'El paquete .h5p no incluye las librerías: ' . implode(', ', $missing)
+                    . '. Regénéralo incluyendo las librerías (exportación completa).'
+                );
+            }
+
             // 3) Subir cada archivo a R2 con claves relativas a la raíz.
             try {
-                foreach ($this->listFiles($root) as $relative) {
+                foreach ($files as $relative) {
                     $storage->put(
                         $prefix . '/' . $relative,
                         $root . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relative),
@@ -249,6 +262,51 @@ final class H5pService
             return $dir . DIRECTORY_SEPARATOR . $parts[0];
         }
         return null;
+    }
+
+    /**
+     * Devuelve la lista de librerías declaradas en h5p.json que NO están
+     * presentes en el paquete (como "H5P.QuestionSet-1.20").
+     *
+     * @param string[] $files rutas relativas de los archivos extraídos
+     * @return string[]
+     */
+    private function missingLibraries(string $root, array $files): array
+    {
+        $manifestPath = $root . DIRECTORY_SEPARATOR . 'h5p.json';
+        $json = is_file($manifestPath) ? file_get_contents($manifestPath) : false;
+        $manifest = $json === false ? null : json_decode($json, true);
+        if (! is_array($manifest)) {
+            return [];
+        }
+
+        $missing = [];
+        foreach (($manifest['preloadedDependencies'] ?? []) as $dep) {
+            if (! is_array($dep)) {
+                continue;
+            }
+            $folder = trim((string) ($dep['machineName'] ?? ''));
+            $major = (int) ($dep['majorVersion'] ?? 0);
+            $minor = (int) ($dep['minorVersion'] ?? 0);
+            if ($folder === '') {
+                continue;
+            }
+            $folderWithVersion = $folder . '-' . $major . '.' . $minor;
+
+            $found = false;
+            foreach ($files as $file) {
+                if (str_starts_with($file, $folderWithVersion . '/')
+                    || str_starts_with($file, $folder . '/')) {
+                    $found = true;
+                    break;
+                }
+            }
+            if (! $found) {
+                $missing[] = $folderWithVersion;
+            }
+        }
+
+        return $missing;
     }
 
     /**

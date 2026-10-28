@@ -112,7 +112,11 @@ final class S3Storage
             $result = $this->client()->getObject($args);
         } catch (S3Exception $e) {
             $status = $e->getStatusCode() ?: 0;
+            $code = $e->getAwsErrorCode() ?? '';
+            error_log("S3 getObject falló [{$code}] ({$status}) para {$key}: " . $e->getAwsErrorMessage());
             http_response_code(in_array($status, [404, 416], true) ? $status : 502);
+            header('Content-Type: application/json');
+            echo json_encode(['error' => $code !== '' ? $code : 'S3Error', 'status' => $status]);
             exit;
         }
 
@@ -142,7 +146,9 @@ final class S3Storage
         if ($body instanceof StreamInterface) {
             // Importante: rewind antes de leer; el cuerpo llega con la posición
             // al final y, sin rebobinar, se copiarían 0 bytes.
-            $body->rewind();
+            if ($body->isSeekable()) {
+                $body->rewind();
+            }
             while (! $body->eof()) {
                 echo $body->read(65536);
                 if (ob_get_level() > 0) {
