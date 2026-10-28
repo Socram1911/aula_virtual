@@ -6,6 +6,7 @@ namespace App\Core\Storage;
 
 use Aws\S3\Exception\S3Exception;
 use Aws\S3\S3Client;
+use Psr\Http\Message\StreamInterface;
 
 /**
  * Cliente de almacenamiento S3-compatible (Cloudflare R2).
@@ -138,26 +139,29 @@ final class S3Storage
         }
 
         $body = $result['Body'] ?? null;
-        if ($body !== null) {
-            if (is_object($body) && method_exists($body, 'detach')) {
-                $resource = $body->detach();
-                if (is_resource($resource)) {
-                    $out = fopen('php://output', 'wb');
-                    if ($out !== false) {
-                        stream_copy_to_stream($resource, $out);
-                        fclose($out);
-                    }
-                    fclose($resource);
+        if ($body instanceof StreamInterface) {
+            // Importante: rewind antes de leer; el cuerpo llega con la posición
+            // al final y, sin rebobinar, se copiarían 0 bytes.
+            $body->rewind();
+            while (! $body->eof()) {
+                echo $body->read(65536);
+                if (ob_get_level() > 0) {
+                    ob_flush();
                 }
-            } elseif (is_resource($body)) {
-                $out = fopen('php://output', 'wb');
-                if ($out !== false) {
-                    stream_copy_to_stream($body, $out);
-                    fclose($out);
-                }
-            } else {
-                echo (string) $body;
+                flush();
             }
+        } elseif (is_resource($body)) {
+            $meta = stream_get_meta_data($body);
+            if (($meta['seekable'] ?? false) === true) {
+                rewind($body);
+            }
+            $out = fopen('php://output', 'wb');
+            if ($out !== false) {
+                stream_copy_to_stream($body, $out);
+                fclose($out);
+            }
+        } elseif ($body !== null) {
+            echo (string) $body;
         }
 
         exit;
