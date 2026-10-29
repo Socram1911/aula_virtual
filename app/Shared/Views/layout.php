@@ -32,22 +32,38 @@ $isStudent = in_array('STUDENT', $roles, true);
 <nav class="navbar navbar-expand-lg navbar-dark navbar-av mb-4">
     <div class="container-fluid">
         <a class="navbar-brand fw-bold" href="<?= url('/dashboard') ?>">Aula Virtual</a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+        <div class="d-none d-lg-flex align-items-center">
+            <span class="navbar-text me-3"><?= e($user['first_name'] . ' ' . $user['last_name']) ?></span>
+            <form method="post" action="<?= url('/logout') ?>" class="d-inline">
+                <?= csrf_field() ?>
+                <button class="btn btn-outline-light btn-sm">Cerrar sesión</button>
+            </form>
+        </div>
+        <button class="navbar-toggler d-lg-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileNav" aria-controls="mobileNav" aria-label="Abrir menú">
             <span class="navbar-toggler-icon"></span>
         </button>
-        <div class="collapse navbar-collapse" id="nav">
-            <ul class="navbar-nav ms-auto align-items-lg-center">
-                <li class="nav-item"><span class="navbar-text me-3"><?= e($user['first_name'] . ' ' . $user['last_name']) ?></span></li>
-                <li class="nav-item">
-                    <form method="post" action="<?= url('/logout') ?>" class="d-inline">
-                        <?= csrf_field() ?>
-                        <button class="btn btn-outline-light btn-sm">Cerrar sesión</button>
-                    </form>
-                </li>
-            </ul>
-        </div>
     </div>
 </nav>
+
+<div class="offcanvas offcanvas-start" tabindex="-1" id="mobileNav" aria-labelledby="mobileNavLabel">
+    <div class="offcanvas-header navbar-av">
+        <h5 class="offcanvas-title text-white" id="mobileNavLabel">Menú</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
+    </div>
+    <div class="offcanvas-body">
+        <div class="d-grid gap-1">
+            <?php include __DIR__ . '/_sidebar_links.php'; ?>
+        </div>
+        <hr>
+        <div class="d-flex justify-content-between align-items-center">
+            <span class="text-muted small"><?= e($user['first_name'] . ' ' . $user['last_name']) ?></span>
+            <form method="post" action="<?= url('/logout') ?>" class="d-inline">
+                <?= csrf_field() ?>
+                <button class="btn btn-outline-secondary btn-sm">Cerrar sesión</button>
+            </form>
+        </div>
+    </div>
+</div>
 <?php endif; ?>
 
 <div class="container-fluid">
@@ -56,37 +72,7 @@ $isStudent = in_array('STUDENT', $roles, true);
         <div class="col-lg-2 d-none d-lg-block">
             <div class="card card-av p-2 sticky-top" style="top:1rem">
                 <div class="d-grid gap-1">
-                    <?php if ($isStudent): ?>
-                        <a class="sidebar-link<?= ($_SERVER['REQUEST_URI'] ?? '') === url('/my-sabers') ? ' active' : '' ?>" href="<?= url('/my-sabers') ?>">Inicio</a>
-                        <a class="sidebar-link" href="<?= url('/my-section') ?>">Mi Sección</a>
-                        <a class="sidebar-link" href="<?= url('/my-activities') ?>">Actividades</a>
-                        <a class="sidebar-link" href="<?= url('/grades') ?>">Calificaciones</a>
-                    <?php endif; ?>
-                    <?php if ($isTeacher && ! $isAdmin): ?>
-                        <a class="sidebar-link<?= ($_SERVER['REQUEST_URI'] ?? '') === url('/dashboard') ? ' active' : '' ?>" href="<?= url('/dashboard') ?>">Mis Saberes</a>
-                        <a class="sidebar-link" href="<?= url('/sections') ?>">Secciones</a>
-                        <a class="sidebar-link" href="<?= url('/saber-assignments') ?>">Asignaciones</a>
-                        <a class="sidebar-link" href="<?= url('/assessments') ?>">Evaluaciones</a>
-                        <a class="sidebar-link" href="<?= url('/grades') ?>">Calificaciones</a>
-                        <a class="sidebar-link" href="<?= url('/reports') ?>">Reportes</a>
-                    <?php endif; ?>
-                    <?php if ($isAdmin): ?>
-                        <a class="sidebar-link<?= ($_SERVER['REQUEST_URI'] ?? '') === url('/dashboard') ? ' active' : '' ?>" href="<?= url('/dashboard') ?>">Dashboard</a>
-                        <a class="sidebar-link" href="<?= url('/sections') ?>">Secciones</a>
-                        <a class="sidebar-link" href="<?= url('/saber-assignments') ?>">Asignaciones</a>
-                        <hr class="my-1">
-                        <a class="sidebar-link" href="<?= url('/users') ?>">Usuarios</a>
-                        <a class="sidebar-link" href="<?= url('/students') ?>">Estudiantes</a>
-                        <a class="sidebar-link" href="<?= url('/academic-periods') ?>">Períodos</a>
-                        <a class="sidebar-link" href="<?= url('/tracks') ?>">Trayectos</a>
-                        <a class="sidebar-link" href="<?= url('/sabers') ?>">Saberes</a>
-                        <a class="sidebar-link" href="<?= url('/assessments') ?>">Evaluaciones</a>
-                        <a class="sidebar-link" href="<?= url('/reports') ?>">Reportes</a>
-                        <a class="sidebar-link" href="<?= url('/audit') ?>">Auditoría</a>
-                        <a class="sidebar-link" href="<?= url('/grades') ?>">Calificaciones</a>
-                    <?php endif; ?>
-                    <hr class="my-1">
-                    <a class="sidebar-link<?= ($_SERVER['REQUEST_URI'] ?? '') === url('/account/password') ? ' active' : '' ?>" href="<?= url('/account/password') ?>">Cambiar contraseña</a>
+                    <?php include __DIR__ . '/_sidebar_links.php'; ?>
                 </div>
             </div>
         </div>
@@ -113,5 +99,15 @@ $isStudent = in_array('STUDENT', $roles, true);
 <script src="<?= asset('h5p-standalone/main.bundle.js') ?>"></script>
 <script src="<?= asset('js/app.js') ?>"></script>
 <script src="<?= asset('js/auth.js') ?>"></script>
+<script>
+// Cierra el menú móvil al navegar a una sección.
+document.addEventListener('click', function (ev) {
+    var link = ev.target.closest('#mobileNav .sidebar-link');
+    if (!link) { return; }
+    var el = document.getElementById('mobileNav');
+    var oc = bootstrap.Offcanvas.getInstance(el);
+    if (oc) { oc.hide(); }
+});
+</script>
 </body>
 </html>
