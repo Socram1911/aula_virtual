@@ -307,3 +307,35 @@ ALTER TABLE grades DROP CONSTRAINT IF EXISTS grades_source_type_check;
 ALTER TABLE grades ADD CONSTRAINT grades_source_type_check CHECK (source_type IN ('ACTIVITY','ASSESSMENT','MANUAL','COMPOSITE','H5P'));
 ALTER TABLE grade_components DROP CONSTRAINT IF EXISTS grade_components_source_type_check;
 ALTER TABLE grade_components ADD CONSTRAINT grade_components_source_type_check CHECK (source_type IN ('ACTIVITIES','ASSESSMENTS','PROJECT','H5P'));
+
+-- Evaluaciones H5P: pesos por contenido evaluable concreto.
+ALTER TABLE grade_components ADD COLUMN IF NOT EXISTS block_id BIGINT NULL REFERENCES content_blocks(id) ON DELETE CASCADE;
+
+-- Entregas de evaluaciones H5P (un intento por estudiante y contenido).
+CREATE TABLE IF NOT EXISTS h5p_submissions (
+    id BIGSERIAL PRIMARY KEY,
+    student_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    block_id BIGINT NOT NULL REFERENCES content_blocks(id) ON DELETE CASCADE,
+    score NUMERIC(10,2) NULL,
+    max_score NUMERIC(10,2) NULL,
+    percentage NUMERIC(5,2) NULL,
+    auto_graded BOOLEAN NOT NULL DEFAULT FALSE,
+    answer_text TEXT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','RELEASED')),
+    graded_by BIGINT NULL REFERENCES users(id) ON DELETE SET NULL,
+    graded_at TIMESTAMP NULL,
+    released_at TIMESTAMP NULL,
+    submitted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (student_id, block_id)
+);
+
+-- Estado de contenido H5P (captura de respuestas de ensayos).
+CREATE TABLE IF NOT EXISTS h5p_states (
+    id BIGSERIAL PRIMARY KEY,
+    student_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    block_id BIGINT NOT NULL REFERENCES content_blocks(id) ON DELETE CASCADE,
+    state JSONB NOT NULL,
+    answer_text TEXT NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (student_id, block_id)
+);

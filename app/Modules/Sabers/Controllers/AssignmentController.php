@@ -9,6 +9,7 @@ use App\Core\Controller;
 use App\Core\Database\Connection;
 use App\Core\Session\Session;
 use App\Modules\Grades\Services\GradeService;
+use App\Modules\H5p\Services\H5pService;
 use App\Modules\Sabers\Services\AssignmentService;
 
 final class AssignmentController extends Controller
@@ -72,12 +73,14 @@ final class AssignmentController extends Controller
     public function show(int $id): void
     {
         $this->requireRole(['ADMIN', 'TEACHER']);
+        $assignment = $this->service->find($id);
         $this->render('Sabers/Assignments/show', [
             'title' => 'Asignación',
-            'assignment' => $this->service->find($id),
+            'assignment' => $assignment,
             'teachers' => $this->service->teachers($id),
             'components' => $this->grades->components($id),
             'students' => $this->grades->studentsForAssignment($id),
+            'evaluableBlocks' => (new H5pService())->evaluableBlocksForSaber($assignment->saber_id),
         ]);
     }
 

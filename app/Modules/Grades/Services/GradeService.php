@@ -59,16 +59,45 @@ final class GradeService
 
     /**
      * Calcula la calificación compuesta usando los componentes configurados.
-     * Si no hay componentes, promedia las calificaciones de evaluación.
+     * Si hay componentes por contenido H5P (block_id), promedia ponderado por
+     * contenido; si hay componentes por tipo, promedia por tipo; sin nada,
+     * promedia las evaluaciones. El resultado es un porcentaje (0-100).
      */
     public function computeComposite(int $saberAssignmentId, int $studentId): float
     {
         $components = Connection::fetchAll(
-            'SELECT source_type, weight FROM grade_components WHERE saber_assignment_id = :a ORDER BY position ASC',
+            'SELECT source_type, weight, block_id FROM grade_components WHERE saber_assignment_id = :a ORDER BY position ASC',
             [':a' => $saberAssignmentId]
         );
 
         if ($components) {
+            $hasBlocks = false;
+            foreach ($components as $c) {
+                if (! empty($c['block_id'])) {
+                    $hasBlocks = true;
+                    break;
+                }
+            }
+
+            if ($hasBlocks) {
+                // Ponderado por contenido evaluable: solo cuenta lo ya calificado.
+                $total = 0.0;
+                $weightSum = 0.0;
+                foreach ($components as $c) {
+                    if (empty($c['block_id'])) {
+                        continue;
+                    }
+                    $pct = $this->percentageForBlock($saberAssignmentId, $studentId, (int) $c['block_id']);
+                    if ($pct === null) {
+                        continue;
+                    }
+                    $weight = (float) $c['weight'];
+                    $total += $pct * ($weight / 100);
+                    $weightSum += $weight;
+                }
+                return $weightSum > 0 ? round($total / ($weightSum / 100), 2) : 0.0;
+            }
+
             $total = 0.0;
             foreach ($components as $c) {
                 $sourceType = match ($c['source_type']) {
@@ -85,6 +114,32 @@ final class GradeService
 
         // Sin configuración: promedio de evaluaciones.
         return $this->averagePercentage($saberAssignmentId, $studentId, 'ASSESSMENT');
+    }
+
+    /** Porcentaje (0-100) de un estudiante en un contenido evaluable, o null si aún no hay nota. */
+    public function percentageForBlock(int $assignmentId, int $studentId, int $blockId): ?float
+    {
+        $row = Connection::fetch(
+            'SELECT percentage FROM grades
+             WHERE saber_assignment_id = :a AND student_id = :s AND source_type = :h5p AND source_id = :b',
+            [':a' => $assignmentId, ':s' => $studentId, ':h5p' => 'H5P', ':b' => $blockId]
+        );
+        if ($row === null || $row['percentage'] === null) {
+            return null;
+        }
+        return (float) $row['percentage'];
+    }
+
+    /** Convierte un porcentaje (0-100) a nota sobre 20. */
+    public function to20(float $percentage): float
+    {
+        return round($percentage / 5, 2);
+    }
+
+    /** Indica si una nota sobre 20 aprueba (umbral 12). */
+    public static function passes(float $note20): bool
+    {
+        return $note20 >= 12.0;
     }
 
     /** Calcula y guarda la calificación compuesta de un estudiante en una asignación. */
@@ -159,15 +214,16 @@ final class GradeService
         try {
             Connection::run('DELETE FROM grade_components WHERE saber_assignment_id = :a', [':a' => $assignmentId]);
             $stmt = $pdo->prepare(
-                'INSERT INTO grade_components (saber_assignment_id, name, source_type, weight, position) VALUES (?, ?, ?, ?, ?)'
+                'INSERT INTO grade_components (saber_assignment_id, name, source_type, weight, position, block_id) VALUES (?, ?, ?, ?, ?, ?)'
             );
             $position = 0;
             foreach ($components as $c) {
                 $name = trim((string) ($c['name'] ?? ''));
-                $type = strtoupper((string) ($c['source_type'] ?? ''));
+                $type = strtoupper((string) ($c['source_type'] ?? 'H5P'));
                 $weight = (float) ($c['weight'] ?? 0);
-                if ($name !== '' && $weight > 0 && in_array($type, ['ACTIVITIES', 'ASSESSMENTS', 'PROJECT', 'H5P'], true)) {
-                    $stmt->execute([$assignmentId, $name, $type, $weight, $position++]);
+                $blockId = ! empty($c['block_id']) ? (int) $c['block_id'] : null;
+                if ($name !== '' && $weight > 0) {
+                    $stmt->execute([$assignmentId, $name, $type, $weight, $position++, $blockId]);
                 }
             }
             $pdo->commit();

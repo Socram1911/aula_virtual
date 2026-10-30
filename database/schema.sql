@@ -349,3 +349,41 @@ CREATE TABLE IF NOT EXISTS sessions (
 -- Calificaciones H5P: amplía los ENUM existentes (idempotente) para bases ya creadas.
 ALTER TABLE grade_components MODIFY COLUMN source_type ENUM('ACTIVITIES','ASSESSMENTS','PROJECT','H5P') NOT NULL;
 ALTER TABLE grades MODIFY COLUMN source_type ENUM('ACTIVITY','ASSESSMENT','MANUAL','COMPOSITE','H5P') NOT NULL;
+
+-- Evaluaciones H5P: pesos por contenido evaluable concreto.
+ALTER TABLE grade_components ADD COLUMN IF NOT EXISTS block_id INT UNSIGNED NULL;
+ALTER TABLE grade_components ADD CONSTRAINT fk_gc_block FOREIGN KEY (block_id) REFERENCES content_blocks(id) ON DELETE CASCADE;
+
+-- Entregas de evaluaciones H5P (un intento por estudiante y contenido).
+CREATE TABLE IF NOT EXISTS h5p_submissions (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    student_id INT UNSIGNED NOT NULL,
+    block_id INT UNSIGNED NOT NULL,
+    score DECIMAL(10,2) NULL,
+    max_score DECIMAL(10,2) NULL,
+    percentage DECIMAL(5,2) NULL,
+    auto_graded TINYINT(1) NOT NULL DEFAULT 0,
+    answer_text TEXT NULL,
+    status ENUM('PENDING','RELEASED') NOT NULL DEFAULT 'PENDING',
+    graded_by INT UNSIGNED NULL,
+    graded_at DATETIME NULL,
+    released_at DATETIME NULL,
+    submitted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_h5p_sub (student_id, block_id),
+    CONSTRAINT fk_h5p_sub_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_h5p_sub_block FOREIGN KEY (block_id) REFERENCES content_blocks(id) ON DELETE CASCADE,
+    CONSTRAINT fk_h5p_sub_graded_by FOREIGN KEY (graded_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Estado de contenido H5P (captura de respuestas de ensayos).
+CREATE TABLE IF NOT EXISTS h5p_states (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    student_id INT UNSIGNED NOT NULL,
+    block_id INT UNSIGNED NOT NULL,
+    state JSON NOT NULL,
+    answer_text TEXT NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_h5p_state (student_id, block_id),
+    CONSTRAINT fk_h5p_state_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_h5p_state_block FOREIGN KEY (block_id) REFERENCES content_blocks(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

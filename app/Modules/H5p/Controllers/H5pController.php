@@ -9,6 +9,7 @@ use App\Core\Controller;
 use App\Core\Exceptions\HttpException;
 use App\Core\Session\Session;
 use App\Core\Storage\S3Storage;
+use App\Modules\Grades\Services\GradeService;
 use App\Modules\H5p\Services\H5pService;
 
 final class H5pController extends Controller
@@ -22,13 +23,13 @@ final class H5pController extends Controller
     }
 
     /**
-     * La devolución de resultados H5P llega desde el iframe del reproductor
-     * (jQuery.post, form-urlencoded) sin cabecera CSRF; la acción valida la
-     * sesión y el rol STUDENT por su cuenta.
+     * La devolución de resultados y el estado de contenido H5P llegan desde el
+     * iframe del reproductor (jQuery.post, form-urlencoded) sin cabecera CSRF;
+     * esas acciones validan la sesión y el rol por su cuenta.
      */
     protected function csrfExempt(): bool
     {
-        return (bool) preg_match('#^/api/h5p/\d+/result$#', $this->request->path());
+        return (bool) preg_match('#^/api/h5p/\d+/(result|state)$#', $this->request->path());
     }
 
     /** Sube un paquete .h5p y crea el bloque dentro de la unidad. */
@@ -41,8 +42,9 @@ final class H5pController extends Controller
             return;
         }
         $title = (string) $this->request->input('title', '');
-        $this->handle(function () use ($unitId, $file, $title): void {
-            $this->service->storeBlock($unitId, $file, $title);
+        $evaluable = (bool) $this->request->input('evaluable', false);
+        $this->handle(function () use ($unitId, $file, $title, $evaluable): void {
+            $this->service->storeBlock($unitId, $file, $title, $evaluable);
             Session::flash('_success', 'Contenido H5P agregado.');
         }, url('/units/' . $unitId . '/edit'));
     }
@@ -67,18 +69,21 @@ final class H5pController extends Controller
     }
 
     /**
-     * API: registra el resultado de un bloque H5P.
+     * API: registra el envío de un bloque H5P evaluable.
      *
      * El runtime H5P llama a setFinishedUrl (vía jQuery.post, form-urlencoded)
-     * con {contentId, score, maxScore, ...} solo cuando el contenido se completa
-     * y tiene puntaje. El servidor acota los valores y calcula el porcentaje.
+     * con {contentId, score, maxScore, ...}. El resultado NO se revela aquí:
+     * queda pendiente de liberación por el docente.
      */
     public function result(int $id): void
     {
         Auth::requireRole('STUDENT');
 
-        $score = (float) ($this->request->input('score', 0));
-        $maxScore = (float) ($this->request->input('maxScore', 0));
+        // El runtime envía form-urlencoded (score/maxScore); el botón de envío de
+        // ensayos usa JSON. Se admite cualquiera de los dos.
+        $body = $this->request->json();
+        $score = (float) ($this->request->input('score', $body['score'] ?? 0));
+        $maxScore = (float) ($this->request->input('maxScore', $body['maxScore'] ?? 0));
 
         if ($score < 0) {
             $score = 0.0;
@@ -89,5 +94,85 @@ final class H5pController extends Controller
 
         $result = $this->service->recordResult((int) Auth::id(), $id, $score, $maxScore);
         $this->json(['data' => $result]);
+    }
+
+    /**
+     * API: estado de contenido (contentUserData) del runtime H5P.
+     * GET devuelve el estado guardado; POST lo guarda (captura el texto de los
+     * ensayos H5P.Essay).
+     */
+    public function state(int $id): void
+    {
+        Auth::requireRole('STUDENT');
+        $studentId = (int) Auth::id();
+
+        if ($this->request->method() === 'GET') {
+            $state = $this->service->loadState($studentId, $id);
+            header('Content-Type: application/json');
+            echo json_encode($state ?? new \stdClass());
+            exit;
+        }
+
+        $data = $this->request->input('data', '');
+        $decoded = is_string($data) && $data !== '' ? json_decode($data, true) : null;
+        if (! is_array($decoded)) {
+            $decoded = [];
+        }
+        $this->service->saveState($studentId, $id, $decoded);
+        $this->json(['data' => ['saved' => true]]);
+    }
+
+    /** Pantalla de corrección/liberación de un contenido evaluable (docente/admin). */
+    public function submissions(int $assignmentId, int $blockId): void
+    {
+        $this->requireRole(['ADMIN', 'TEACHER']);
+        $block = $this->service->findBlock($blockId);
+        $this->render('H5p/submissions', [
+            'title' => 'Evaluación H5P: ' . $block->title,
+            'block' => $block,
+            'assignmentId' => $assignmentId,
+            'submissions' => $this->service->submissionsForBlock($blockId),
+        ]);
+    }
+
+    /** Libera los resultados de un contenido evaluable (todos los estudiantes). */
+    public function release(int $assignmentId, int $blockId): void
+    {
+        $this->requireRole(['ADMIN', 'TEACHER']);
+        try {
+            $n = $this->service->releaseBlock($blockId);
+        } catch (HttpException $e) {
+            $this->backWithErrors(
+                url('/saber-assignments/' . $assignmentId . '/h5p/' . $blockId . '/submissions'),
+                $e->details() ?: [$e->getMessage()]
+            );
+            return;
+        }
+        Session::flash('_success', "Resultados liberados para {$n} estudiantes.");
+        $this->redirect(url('/saber-assignments/' . $assignmentId . '/h5p/' . $blockId . '/submissions'));
+    }
+
+    /** Guarda la nota manual de una entrega (ensayo). */
+    public function grade(int $submissionId): void
+    {
+        $this->requireRole(['ADMIN', 'TEACHER']);
+        $score = (float) $this->request->input('score', 0);
+        $maxScore = (float) $this->request->input('max_score', 20);
+        $this->service->gradeSubmission($submissionId, $score, $maxScore, (int) Auth::id());
+        Session::flash('_success', 'Nota guardada.');
+        $this->back();
+    }
+
+    /** Datos de la entrega del estudiante actual para un bloque (usado en la vista). */
+    public function mySubmission(int $blockId): void
+    {
+        Auth::requireRole('STUDENT');
+        $sub = $this->service->submissionFor((int) Auth::id(), $blockId);
+        $data = $sub === null ? null : [
+            'status' => $sub['status'],
+            'percentage' => $sub['percentage'] !== null ? (float) $sub['percentage'] : null,
+            'note20' => $sub['percentage'] !== null ? (new GradeService())->to20((float) $sub['percentage']) : null,
+        ];
+        $this->json(['data' => $data]);
     }
 }

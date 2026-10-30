@@ -1,5 +1,12 @@
 <?php
-/** @var \App\Modules\Sabers\Models\SaberAssignment $assignment @var array $teachers @var array $components @var array $students */
+/** @var \App\Modules\Sabers\Models\SaberAssignment $assignment @var array $teachers @var array $components @var array $students @var array $evaluableBlocks */
+$componentByBlock = [];
+foreach ($components as $c) {
+    if (! empty($c['block_id'])) {
+        $componentByBlock[(int) $c['block_id']] = $c;
+    }
+}
+$to20 = fn ($pct) => number_format(((float) $pct) / 5, 2, '.', '');
 ?>
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1 class="h4 mb-0"><?= e($assignment->saber_name) ?> — <?= e($assignment->sectionLabel()) ?></h1>
@@ -27,33 +34,55 @@
 
 <div class="row g-3">
     <div class="col-lg-5">
-        <div class="card card-av">
+        <div class="card card-av mb-3">
             <div class="card-body">
                 <h2 class="h6">Configuración de calificaciones</h2>
+                <p class="small text-muted">Asigne un peso (%) a cada contenido H5P evaluable del Saber. La nota final se calcula con el promedio ponderado y se expresa sobre 20 (aprueba con 12).</p>
+                <?php if (! $evaluableBlocks): ?>
+                    <div class="alert alert-info small mb-0">Este Saber aún no tiene contenido H5P evaluable.</div>
+                <?php else: ?>
                 <form method="post" action="<?= url('/saber-assignments/' . $assignment->id . '/components') ?>">
                     <?= csrf_field() ?>
-                    <p class="small text-muted">Defina componentes con pesos que sumen 100%. Ej.: Actividades 20%, Evaluaciones 60%, Proyecto 20%.</p>
                     <div id="components">
-                        <?php foreach ($components as $i => $c): ?>
-                            <div class="row g-2 mb-2">
-                                <div class="col-4"><input type="text" name="components[<?= $i ?>][name]" class="form-control form-control-sm" value="<?= e($c['name']) ?>" placeholder="Nombre"></div>
-                                <div class="col-4">
-                                    <select name="components[<?= $i ?>][source_type]" class="form-select form-select-sm">
-                                        <option value="ACTIVITIES" <?= selected($c['source_type'], 'ACTIVITIES') ?>>Actividades</option>
-                                        <option value="ASSESSMENTS" <?= selected($c['source_type'], 'ASSESSMENTS') ?>>Evaluaciones</option>
-                                        <option value="PROJECT" <?= selected($c['source_type'], 'PROJECT') ?>>Proyecto</option>
-                                        <option value="H5P" <?= selected($c['source_type'], 'H5P') ?>>H5P</option>
-                                    </select>
+                        <?php foreach ($evaluableBlocks as $i => $b): ?>
+                            <?php $prev = $componentByBlock[(int) $b['id']] ?? null; ?>
+                            <div class="row g-2 mb-2 align-items-center">
+                                <div class="col-8">
+                                    <input type="hidden" name="components[<?= $i ?>][block_id]" value="<?= (int) $b['id'] ?>">
+                                    <input type="hidden" name="components[<?= $i ?>][source_type]" value="H5P">
+                                    <input type="hidden" name="components[<?= $i ?>][name]" value="<?= e($b['title'] ?: 'H5P') ?>">
+                                    <span class="small"><?= e($b['title'] ?: '(sin título)') ?> <span class="text-muted">· <?= e($b['unit_title']) ?></span></span>
                                 </div>
-                                <div class="col-4"><input type="number" step="0.01" name="components[<?= $i ?>][weight]" class="form-control form-control-sm" value="<?= e($c['weight']) ?>" placeholder="%"></div>
+                                <div class="col-4">
+                                    <div class="input-group input-group-sm">
+                                        <input type="number" step="0.01" min="0" name="components[<?= $i ?>][weight]" class="form-control" value="<?= e($prev['weight'] ?? '') ?>" placeholder="%">
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                </div>
                             </div>
                         <?php endforeach; ?>
                     </div>
-                    <div class="d-flex gap-2">
-                        <button type="button" class="btn btn-sm btn-outline-secondary" id="add-component">+ Componente</button>
-                        <button class="btn btn-sm btn-primary">Guardar</button>
-                    </div>
+                    <button class="btn btn-sm btn-primary">Guardar pesos</button>
                 </form>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <div class="card card-av">
+            <div class="card-body">
+                <h2 class="h6">Evaluaciones H5P</h2>
+                <?php if (! $evaluableBlocks): ?>
+                    <p class="text-muted small mb-0">No hay evaluaciones H5P para este Saber.</p>
+                <?php else: ?>
+                    <ul class="list-unstyled mb-0">
+                        <?php foreach ($evaluableBlocks as $b): ?>
+                            <li class="d-flex justify-content-between align-items-center py-1">
+                                <span class="small"><?= e($b['title'] ?: '(sin título)') ?> <span class="text-muted">· <?= e($b['unit_title']) ?></span></span>
+                                <a href="<?= url('/saber-assignments/' . $assignment->id . '/h5p/' . (int) $b['id'] . '/submissions') ?>" class="btn btn-sm btn-outline-primary">Corregir / Liberar</a>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                <?php endif; ?>
             </div>
         </div>
     </div>
@@ -63,7 +92,7 @@
                 <h2 class="h6">Estudiantes: progreso y calificación</h2>
                 <div class="table-responsive">
                     <table class="table table-sm align-middle mb-0">
-                        <thead class="table-light"><tr><th>Estudiante</th><th>Progreso</th><th>Nota</th></tr></thead>
+                        <thead class="table-light"><tr><th>Estudiante</th><th>Progreso</th><th>Nota (20)</th></tr></thead>
                         <tbody>
                         <?php foreach ($students as $st): ?>
                             <tr>
@@ -74,7 +103,14 @@
                                     </div>
                                     <?= (int) round($st['progress']) ?>%
                                 </td>
-                                <td><?= $st['grade_value'] !== null ? e($st['grade_value']) : '—' ?></td>
+                                <td>
+                                    <?php if ($st['grade_value'] !== null): ?>
+                                        <strong><?= e($to20($st['grade_value'])) ?></strong>
+                                        <span class="badge <?= (float) $to20($st['grade_value']) >= 12 ? 'bg-success' : 'bg-danger' ?> ms-1">
+                                            <?= (float) $to20($st['grade_value']) >= 12 ? 'Aprobado' : 'Reprobado' ?>
+                                        </span>
+                                    <?php else: ?>—<?php endif; ?>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                         <?php if (! $students): ?><tr><td colspan="3" class="text-muted">Sin estudiantes.</td></tr><?php endif; ?>
@@ -85,17 +121,3 @@
         </div>
     </div>
 </div>
-
-<script>
-document.getElementById('add-component').addEventListener('click', function () {
-    var container = document.getElementById('components');
-    var idx = container.children.length;
-    var row = document.createElement('div');
-    row.className = 'row g-2 mb-2';
-    row.innerHTML = '<div class="col-4"><input type="text" name="components[' + idx + '][name]" class="form-control form-control-sm" placeholder="Nombre"></div>' +
-        '<div class="col-4"><select name="components[' + idx + '][source_type]" class="form-select form-select-sm">' +
-        '<option value="ACTIVITIES">Actividades</option><option value="ASSESSMENTS">Evaluaciones</option><option value="PROJECT">Proyecto</option><option value="H5P">H5P</option></select></div>' +
-        '<div class="col-4"><input type="number" step="0.01" name="components[' + idx + '][weight]" class="form-control form-control-sm" placeholder="%"></div>';
-    container.appendChild(row);
-});
-</script>

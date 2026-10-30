@@ -37,8 +37,10 @@ final class H5pService
     /**
      * Crea un bloque H5P y sube cada archivo del paquete a R2
      * (clave h5p/{blockId}/{ruta}). Devuelve el bloque creado.
+     *
+     * @param bool $evaluable si es contenido evaluable (cuenta para la nota y no se puede reintentar)
      */
-    public function storeBlock(int $unitId, array $uploaded, string $title): ContentBlock
+    public function storeBlock(int $unitId, array $uploaded, string $title, bool $evaluable = false): ContentBlock
     {
         if (($uploaded['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
             throw HttpException::unprocessable('Error al subir el archivo H5P.');
@@ -110,6 +112,22 @@ final class H5pService
                 );
             }
 
+            // 2c) Guardar en settings si es evaluable y qué tipo de contenido es
+            //     (mainLibrary), para distinguir ensayos (H5P.Essay) de los
+            //     contenidos auto-calificables.
+            if ($evaluable) {
+                $manifestPath = $root . DIRECTORY_SEPARATOR . 'h5p.json';
+                $mainLibrary = '';
+                if (is_file($manifestPath)) {
+                    $manifest = json_decode((string) file_get_contents($manifestPath), true);
+                    $mainLibrary = is_array($manifest) ? (string) ($manifest['mainLibrary'] ?? '') : '';
+                }
+                Connection::run(
+                    'UPDATE content_blocks SET settings = :s WHERE id = :id',
+                    [':s' => json_encode(['evaluable' => true, 'mainLibrary' => $mainLibrary]), ':id' => $blockId]
+                );
+            }
+
             // 3) Subir cada archivo a R2 con claves relativas a la raíz.
             try {
                 foreach ($files as $relative) {
@@ -142,41 +160,238 @@ final class H5pService
     }
 
     /**
-     * Registra el resultado de un bloque H5P: si hay puntaje, guarda la
-     * calificación (fuente H5P) en cada asignación del estudiante para el Saber
-     * de la unidad y recalcula la compuesta. En todos los casos (el runtime solo
-     * notifica al completar) marca el progreso del bloque como completado.
+     * Registra el envío de un bloque H5P evaluable (un solo intento).
      *
-     * @return array{percentage: float, graded: bool, assignments: int}
+     * No guarda la nota todavía: crea una entrega en estado PENDING. Si el
+     * contenido reportó puntaje (opción múltiple, quiz, etc.) se auto-califica;
+     * si no (p. ej. H5P.Essay) queda pendiente de corrección manual. El
+     * estudiante no ve el resultado hasta que el docente libere la evaluación.
+     *
+     * @return array{submitted: bool}
      */
     public function recordResult(int $studentId, int $blockId, float $score, float $maxScore): array
     {
         $block = $this->findBlock($blockId);
 
+        if (! $this->isEvaluable($block)) {
+            // Contenido práctico (no evaluable): solo se marca el progreso.
+            $this->progress->markBlockCompleted($studentId, $blockId);
+            return ['submitted' => false];
+        }
+
+        $existing = Connection::fetch(
+            'SELECT id FROM h5p_submissions WHERE student_id = :s AND block_id = :b',
+            [':s' => $studentId, ':b' => $blockId]
+        );
+        if ($existing !== null) {
+            throw HttpException::conflict('Ya realizó esta evaluación.');
+        }
+
+        $autoGraded = $maxScore > 0;
+        $percentage = $autoGraded ? round(($score / $maxScore) * 100, 2) : null;
+
+        // Para contenidos sin puntaje (ensayos), copia el texto capturado.
+        $answerText = null;
+        if (! $autoGraded) {
+            $state = Connection::fetch(
+                'SELECT answer_text FROM h5p_states WHERE student_id = :s AND block_id = :b',
+                [':s' => $studentId, ':b' => $blockId]
+            );
+            $answerText = $state !== null ? $state['answer_text'] : null;
+        }
+
+        Connection::run(
+            'INSERT INTO h5p_submissions (student_id, block_id, score, max_score, percentage, auto_graded, answer_text, status)
+             VALUES (:s, :b, :score, :max, :pct, :auto, :answer, :status)',
+            [
+                ':s' => $studentId,
+                ':b' => $blockId,
+                ':score' => $autoGraded ? $score : null,
+                ':max' => $autoGraded ? $maxScore : null,
+                ':pct' => $percentage,
+                ':auto' => $autoGraded ? 1 : 0,
+                ':answer' => $answerText,
+                ':status' => 'PENDING',
+            ]
+        );
+
+        $this->progress->markBlockCompleted($studentId, $blockId);
+
+        return ['submitted' => true];
+    }
+
+    /** Indica si un bloque H5P está marcado como evaluable. */
+    public function isEvaluable(ContentBlock $block): bool
+    {
+        $settings = $block->settingsArray();
+
+        return ($settings['evaluable'] ?? false) === true;
+    }
+
+    /** Entrega (si existe) de un estudiante para un bloque. */
+    public function submissionFor(int $studentId, int $blockId): ?array
+    {
+        return Connection::fetch(
+            'SELECT * FROM h5p_submissions WHERE student_id = :s AND block_id = :b',
+            [':s' => $studentId, ':b' => $blockId]
+        );
+    }
+
+    /**
+     * Contenidos H5P evaluables de un Saber (a través de sus unidades).
+     */
+    public function evaluableBlocksForSaber(int $saberId): array
+    {
+        $rows = Connection::fetchAll(
+            'SELECT cb.id, cb.title, cb.settings, u.id AS unit_id, u.title AS unit_title
+             FROM content_blocks cb
+             JOIN units u ON u.id = cb.unit_id
+             WHERE cb.type = :t AND u.saber_id = :saber
+             ORDER BY u.position, cb.position',
+            [':t' => 'H5P', ':saber' => $saberId]
+        );
+
+        return array_values(array_filter($rows, function (array $row): bool {
+            $settings = is_string($row['settings'] ?? null) ? json_decode($row['settings'], true) : null;
+            return is_array($settings) && ($settings['evaluable'] ?? false) === true;
+        }));
+    }
+
+    /** Entregas de un bloque (para la pantalla de corrección del docente). */
+    public function submissionsForBlock(int $blockId): array
+    {
+        return Connection::fetchAll(
+            'SELECT hs.*, st.state AS state_json, st.answer_text AS state_answer,
+                    u.first_name, u.last_name, u.email
+             FROM h5p_submissions hs
+             JOIN users u ON u.id = hs.student_id
+             LEFT JOIN h5p_states st ON st.student_id = hs.student_id AND st.block_id = hs.block_id
+             WHERE hs.block_id = :b
+             ORDER BY hs.submitted_at ASC',
+            [':b' => $blockId]
+        );
+    }
+
+    /**
+     * Guarda la nota manual de una entrega (ensayo). El docente asigna un puntaje
+     * sobre max_score (por defecto 20). No libera todavía.
+     */
+    public function gradeSubmission(int $submissionId, float $score, float $maxScore, int $graderId): void
+    {
+        $sub = Connection::fetch('SELECT * FROM h5p_submissions WHERE id = :id', [':id' => $submissionId]);
+        if ($sub === null) {
+            throw HttpException::notFound('Entrega no encontrada.');
+        }
+        if ($maxScore <= 0) {
+            $maxScore = 20.0;
+        }
+        if ($score < 0) {
+            $score = 0.0;
+        }
+        if ($score > $maxScore) {
+            $score = $maxScore;
+        }
+        $percentage = round(($score / $maxScore) * 100, 2);
+
+        Connection::run(
+            'UPDATE h5p_submissions
+             SET score = :score, max_score = :max, percentage = :pct, auto_graded = FALSE, graded_by = :gb, graded_at = :at
+             WHERE id = :id',
+            [':score' => $score, ':max' => $maxScore, ':pct' => $percentage, ':gb' => $graderId, ':at' => date('Y-m-d H:i:s'), ':id' => $submissionId]
+        );
+    }
+
+    /**
+     * Libera los resultados de un bloque evaluable (todos los estudiantes).
+     * Requiere que todas las entregas tengan nota (los ensayos deben corregirse
+     * antes). Registra la nota en `grades` y recalcula la compuesta.
+     *
+     * @return int número de entregas liberadas
+     */
+    public function releaseBlock(int $blockId): int
+    {
+        $block = $this->findBlock($blockId);
         $unit = Connection::fetch('SELECT saber_id FROM units WHERE id = :id', [':id' => $block->unit_id]);
         if ($unit === null) {
             throw HttpException::notFound('Unidad no encontrada.');
         }
 
-        $graded = $maxScore > 0;
-        $percentage = $graded ? round(($score / $maxScore) * 100, 2) : 0.0;
-
-        $assignments = $this->progress->assignmentsForSaber($studentId, (int) $unit['saber_id']);
-
-        foreach ($assignments as $assignmentId) {
-            if ($graded) {
-                $this->grades->recordH5p($assignmentId, $studentId, $blockId, $score, $percentage);
-                $this->grades->recordComposite($assignmentId, $studentId);
+        $pending = $this->submissionsForBlock($blockId);
+        foreach ($pending as $sub) {
+            if ($sub['percentage'] === null || $sub['score'] === null) {
+                throw HttpException::unprocessable(
+                    'Hay entregas sin calificar (ensayos). Corrija todas las notas antes de liberar.'
+                );
             }
         }
 
-        $this->progress->markBlockCompleted($studentId, $blockId);
+        $released = 0;
+        foreach ($pending as $sub) {
+            if ($sub['status'] === 'RELEASED') {
+                continue;
+            }
+            $studentId = (int) $sub['student_id'];
+            $assignments = $this->progress->assignmentsForSaber($studentId, (int) $unit['saber_id']);
+            foreach ($assignments as $assignmentId) {
+                $this->grades->recordH5p(
+                    $assignmentId,
+                    $studentId,
+                    $blockId,
+                    (float) $sub['score'],
+                    (float) $sub['percentage']
+                );
+                $this->grades->recordComposite($assignmentId, $studentId);
+            }
+            Connection::run(
+                'UPDATE h5p_submissions SET status = :st, released_at = :at WHERE id = :id',
+                [':st' => 'RELEASED', ':at' => date('Y-m-d H:i:s'), ':id' => (int) $sub['id']]
+            );
+            $released++;
+        }
 
-        return [
-            'percentage' => $percentage,
-            'graded' => $graded,
-            'assignments' => count($assignments),
-        ];
+        return $released;
+    }
+
+    /**
+     * Guarda el estado de contenido (contentUserData) del runtime H5P. Se usa
+     * para capturar la respuesta de los ensayos (H5P.Essay).
+     */
+    public function saveState(int $studentId, int $blockId, array $data): void
+    {
+        $this->findBlock($blockId);
+        $state = json_encode($data, JSON_UNESCAPED_UNICODE);
+
+        // Extrae el texto del ensayo si viene en el estado.
+        $answer = $data['answer'] ?? null;
+        $answerText = is_string($answer) ? $answer : null;
+
+        Connection::run(
+            'INSERT INTO h5p_states (student_id, block_id, state, answer_text, updated_at)
+             VALUES (:s, :b, :state, :answer, :at)'
+            . Connection::onConflict('student_id, block_id')
+            . 'state = :state, answer_text = :answer, updated_at = :at',
+            [
+                ':s' => $studentId,
+                ':b' => $blockId,
+                ':state' => $state,
+                ':answer' => $answerText,
+                ':at' => date('Y-m-d H:i:s'),
+            ]
+        );
+    }
+
+    /** Devuelve el estado guardado de un estudiante en un bloque. */
+    public function loadState(int $studentId, int $blockId): ?array
+    {
+        $row = Connection::fetch(
+            'SELECT state FROM h5p_states WHERE student_id = :s AND block_id = :b',
+            [':s' => $studentId, ':b' => $blockId]
+        );
+        if ($row === null) {
+            return null;
+        }
+        $decoded = json_decode((string) $row['state'], true);
+        return is_array($decoded) ? $decoded : null;
     }
 
     /** MIME a partir de la extensión del archivo del paquete H5P. */

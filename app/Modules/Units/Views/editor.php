@@ -99,46 +99,6 @@ foreach ($blocks as $b) {
     <div class="col-lg-4">
         <div class="card card-av mb-3">
             <div class="card-body">
-                <h2 class="h6">Agregar actividad</h2>
-                <form method="post" action="<?= url('/units/' . $unit->id . '/activities') ?>">
-                    <?= csrf_field() ?>
-                    <div class="mb-2">
-                        <label class="form-label">Tipo</label>
-                        <select name="activity_type" class="form-select">
-                            <option value="SINGLE_ANSWER">Respuesta única</option>
-                            <option value="MULTIPLE_CHOICE">Selección múltiple</option>
-                            <option value="TRUE_FALSE">Verdadero / Falso</option>
-                        </select>
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label">Pregunta</label>
-                        <input type="text" name="question" class="form-control" required>
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label">Clasificación</label>
-                        <select name="classification" class="form-select">
-                            <option value="FORMATIVE">Formativa (práctica)</option>
-                            <option value="GRADED">Calificable</option>
-                        </select>
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label">Opciones (marca la correcta)</label>
-                        <?php for ($i = 0; $i < 4; $i++): ?>
-                            <div class="input-group input-group-sm mb-1">
-                                <span class="input-group-text">
-                                    <input class="form-check-input mt-0" type="radio" name="options[<?= $i ?>][correct]" value="1" <?= $i === 0 ? 'checked' : '' ?> title="Correcta">
-                                </span>
-                                <input type="text" name="options[<?= $i ?>][text]" class="form-control" placeholder="Opción <?= $i + 1 ?>">
-                            </div>
-                        <?php endfor; ?>
-                    </div>
-                    <button class="btn btn-success w-100">Agregar actividad</button>
-                </form>
-            </div>
-        </div>
-
-        <div class="card card-av mb-3">
-            <div class="card-body">
                 <h2 class="h6">Agregar contenido H5P</h2>
                 <p class="small text-muted">Suba un paquete <code>.h5p</code> (creado con Lumi o descargado de H5P.org).</p>
                 <form method="post" action="<?= url('/units/' . $unit->id . '/h5p') ?>" enctype="multipart/form-data">
@@ -149,6 +109,10 @@ foreach ($blocks as $b) {
                     </div>
                     <div class="mb-2">
                         <input type="file" name="file" class="form-control" accept=".h5p" required>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" name="evaluable" value="1" id="h5p-evaluable">
+                        <label class="form-check-label" for="h5p-evaluable">Evaluable (cuenta para la nota del Saber, un solo intento)</label>
                     </div>
                     <button class="btn btn-info w-100 text-white">Subir H5P</button>
                 </form>

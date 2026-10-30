@@ -36,6 +36,25 @@
                 throw new Error((body && body.error && body.error.message) || 'Error de red');
             }
             return body;
+        },
+        /**
+         * Petición GET con fetch y manejo de errores.
+         * @param {string} url
+         * @returns {Promise<object>}
+         */
+        get: async function (url) {
+            const resp = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-Token': (document.querySelector('meta[name="csrf-token"]') || {}).content || ''
+                }
+            });
+            const body = await resp.json();
+            if (!resp.ok) {
+                throw new Error((body && body.error && body.error.message) || 'Error de red');
+            }
+            return body;
         }
     };
 
@@ -50,22 +69,75 @@
             }
             el.dataset.initialized = '1';
             var blockId = el.dataset.blockId;
-            new window.H5PStandalone.H5P(el, {
-                h5pJsonPath: el.dataset.h5pPath,
-                frameJs: el.dataset.frameJs,
-                frameCss: el.dataset.frameCss,
-                // El runtime informa el resultado (score/maxScore) a este endpoint
-                // cuando el contenido se completa; el servidor registra la nota.
-                postUserStatistics: true,
-                ajax: {
-                    setFinishedUrl: '/api/h5p/' + blockId + '/result'
-                }
+
+            var loadH5P = function () {
+                new window.H5PStandalone.H5P(el, {
+                    h5pJsonPath: el.dataset.h5pPath,
+                    frameJs: el.dataset.frameJs,
+                    frameCss: el.dataset.frameCss,
+                    // El runtime informa el resultado (score/maxScore) a este endpoint
+                    // cuando el contenido se completa; el servidor registra la nota.
+                    postUserStatistics: true,
+                    saveFreq: 60,
+                    ajax: {
+                        setFinishedUrl: '/api/h5p/' + blockId + '/result',
+                        contentUserDataUrl: '/api/h5p/' + blockId + '/state'
+                    }
+                }).catch(function (err) {
+                    console.error('No se pudo cargar el contenido H5P:', err);
+                    el.innerHTML = '<div class="alert alert-danger small">No se pudo cargar el contenido interactivo H5P. ' +
+                        '<small class="d-block text-muted">' + (err && err.message ? err.message : '') + '</small></div>';
+                });
+            };
+
+            // Contenido evaluable: un solo intento y resultado oculto hasta liberación.
+            if (el.dataset.evaluable === '1') {
+                window.AV.get('/api/h5p/' + blockId + '/submission').then(function (resp) {
+                    var sub = resp.data;
+                    if (!sub) {
+                        loadH5P();
+                        // Ensayos: no reportan puntaje; se envía manualmente.
+                        if ((el.dataset.mainLibrary || '').indexOf('H5P.Essay') === 0) {
+                            appendEssaySubmit(el, blockId);
+                        }
+                        return;
+                    }
+                    if (sub.status === 'RELEASED') {
+                        var nota = sub.note20;
+                        var ok = nota >= 12;
+                        el.innerHTML = '<div class="alert ' + (ok ? 'alert-success' : 'alert-danger') + ' mb-0">' +
+                            '<strong>Evaluación completada.</strong> Nota: <strong>' + nota + '/20</strong> — ' +
+                            (ok ? 'Aprobado' : 'Reprobado') + '</div>';
+                    } else {
+                        el.innerHTML = '<div class="alert alert-info mb-0">Evaluación enviada. Los resultados se publicarán cuando el docente lo habilite.</div>';
+                    }
+                }).catch(function () {
+                    loadH5P();
+                });
+            } else {
+                loadH5P();
+            }
+        });
+    }
+
+    // Botón "Enviar evaluación" para ensayos (H5P.Essay no produce puntaje).
+    function appendEssaySubmit(el, blockId) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-sm btn-primary mt-2';
+        btn.textContent = 'Enviar evaluación';
+        btn.addEventListener('click', function () {
+            btn.disabled = true;
+            btn.textContent = 'Enviando…';
+            window.AV.post('/api/h5p/' + blockId + '/result', { score: 0, maxScore: 0 }).then(function () {
+                location.reload();
             }).catch(function (err) {
-                console.error('No se pudo cargar el contenido H5P:', err);
-                el.innerHTML = '<div class="alert alert-danger small">No se pudo cargar el contenido interactivo H5P. ' +
-                    '<small class="d-block text-muted">' + (err && err.message ? err.message : '') + '</small></div>';
+                btn.disabled = false;
+                btn.textContent = 'Enviar evaluación';
+                alert(err.message || 'Error al enviar.');
             });
         });
+        el.appendChild(btn);
     }
     document.addEventListener('DOMContentLoaded', initH5P);
 

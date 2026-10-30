@@ -30,8 +30,13 @@ switch ($block->type) {
         echo $block->content; // HTML de inserción confiable (solo docentes).
         break;
     case 'H5P':
+        $h5pSettings = $block->settingsArray();
+        $isEvaluable = ($h5pSettings['evaluable'] ?? false) === true;
+        $mainLibrary = (string) ($h5pSettings['mainLibrary'] ?? '');
         echo '<div class="h5p-container w-100"'
             . ' data-block-id="' . (int) $block->id . '"'
+            . ' data-evaluable="' . ($isEvaluable ? '1' : '0') . '"'
+            . ' data-main-library="' . e($mainLibrary) . '"'
             . ' data-h5p-path="' . e(url('/h5p/' . (int) $block->id)) . '"'
             . ' data-frame-js="' . e(url('/assets/h5p-standalone/frame.bundle.js')) . '"'
             . ' data-frame-css="' . e(url('/assets/h5p-standalone/styles/h5p.css')) . '">'
