@@ -79,6 +79,12 @@
                     // cuando el contenido se completa; el servidor registra la nota.
                     postUserStatistics: true,
                     saveFreq: 60,
+                    // Requerido: sin "user" el runtime NO guarda el estado del
+                    // contenido (contentUserData), y las respuestas se pierden.
+                    user: {
+                        name: (document.querySelector('meta[name="user-name"]') || {}).content || 'Estudiante',
+                        mail: (document.querySelector('meta[name="user-mail"]') || {}).content || ''
+                    },
                     ajax: {
                         setFinishedUrl: '/api/h5p/' + blockId + '/result',
                         contentUserDataUrl: '/api/h5p/' + blockId + '/state/:subContentId'

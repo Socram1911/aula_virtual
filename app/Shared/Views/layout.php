@@ -19,6 +19,10 @@ $isStudent = in_array('STUDENT', $roles, true);
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="<?= e(Csrf::token()) ?>">
+    <?php if (! empty($user['first_name'])): ?>
+    <meta name="user-name" content="<?= e($user['first_name'] . ' ' . $user['last_name']) ?>">
+    <meta name="user-mail" content="<?= e($user['email'] ?? '') ?>">
+    <?php endif; ?>
     <title><?= e($title) ?></title>
     <link rel="icon" type="image/svg+xml" href="<?= asset('img/favicon.svg') ?>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
