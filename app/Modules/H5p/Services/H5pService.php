@@ -644,33 +644,60 @@ final class H5pService
             return [];
         }
 
-        $missing = [];
-        foreach (($manifest['preloadedDependencies'] ?? []) as $dep) {
-            if (! is_array($dep)) {
-                continue;
-            }
-            $folder = trim((string) ($dep['machineName'] ?? ''));
-            $major = (int) ($dep['majorVersion'] ?? 0);
-            $minor = (int) ($dep['minorVersion'] ?? 0);
-            if ($folder === '') {
-                continue;
-            }
-            $folderWithVersion = $folder . '-' . $major . '.' . $minor;
-
-            $found = false;
-            foreach ($files as $file) {
-                if (str_starts_with($file, $folderWithVersion . '/')
-                    || str_starts_with($file, $folder . '/')) {
-                    $found = true;
-                    break;
-                }
-            }
-            if (! $found) {
-                $missing[] = $folderWithVersion;
+        // Índice machineName → carpeta real (con o sin versión en el nombre).
+        $folders = [];
+        foreach ($files as $file) {
+            $first = explode('/', $file)[0];
+            if (preg_match('/^(.+?)-(\d+)\.(\d+)$/', $first, $m)) {
+                $folders[$m[1]] = $first;
+            } else {
+                $folders[$first] = $first;
             }
         }
 
-        return $missing;
+        $missing = [];
+        $visited = [];
+        $queue = $manifest['preloadedDependencies'] ?? [];
+
+        // Recorre las dependencias de forma transitiva: cada librería declara sus
+        // propias preloadedDependencies en su library.json, y todas deben existir
+        // en el paquete para que el contenido cargue.
+        while ($queue !== []) {
+            $dep = array_shift($queue);
+            if (! is_array($dep)) {
+                continue;
+            }
+            $machine = trim((string) ($dep['machineName'] ?? ''));
+            $major = (int) ($dep['majorVersion'] ?? 0);
+            $minor = (int) ($dep['minorVersion'] ?? 0);
+            if ($machine === '') {
+                continue;
+            }
+            $key = $machine . '-' . $major . '.' . $minor;
+            if (isset($visited[$key])) {
+                continue;
+            }
+            $visited[$key] = true;
+
+            $folder = $folders[$machine] ?? null;
+            if ($folder === null) {
+                $missing[] = $key;
+                continue;
+            }
+
+            // Agrega las dependencias transitivas de esta librería.
+            $libJson = $root . DIRECTORY_SEPARATOR . $folder . DIRECTORY_SEPARATOR . 'library.json';
+            if (is_file($libJson)) {
+                $lib = json_decode((string) file_get_contents($libJson), true);
+                if (is_array($lib) && isset($lib['preloadedDependencies']) && is_array($lib['preloadedDependencies'])) {
+                    foreach ($lib['preloadedDependencies'] as $sub) {
+                        $queue[] = $sub;
+                    }
+                }
+            }
+        }
+
+        return array_values(array_unique($missing));
     }
 
     /**
