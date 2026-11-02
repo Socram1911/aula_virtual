@@ -75,6 +75,10 @@
                     h5pJsonPath: el.dataset.h5pPath,
                     frameJs: el.dataset.frameJs,
                     frameCss: el.dataset.frameCss,
+                    // Fija el contentId al id del bloque. Sin esto, el reproductor
+                    // asigna un id aleatorio y no sabríamos a qué bloque pertenece
+                    // el resultado/estado cuando hay varios H5P en la misma página.
+                    id: blockId,
                     // El runtime informa el resultado (score/maxScore) a este endpoint
                     // cuando el contenido se completa; el servidor registra la nota.
                     postUserStatistics: true,
@@ -86,8 +90,10 @@
                         mail: (document.querySelector('meta[name="user-mail"]') || {}).content || ''
                     },
                     ajax: {
-                        setFinishedUrl: '/api/h5p/' + blockId + '/result',
-                        contentUserDataUrl: '/api/h5p/' + blockId + '/state/:subContentId'
+                        // URL única: el contentId (blockId) viaja en el cuerpo.
+                        setFinishedUrl: '/api/h5p/result',
+                        // URL con placeholders que el runtime rellena por contenido.
+                        contentUserDataUrl: '/api/h5p/state/:contentId/:subContentId'
                     }
                 }).catch(function (err) {
                     console.error('No se pudo cargar el contenido H5P:', err);
@@ -135,7 +141,7 @@
         btn.addEventListener('click', function () {
             btn.disabled = true;
             btn.textContent = 'Enviando…';
-            window.AV.post('/api/h5p/' + blockId + '/result', { score: 0, maxScore: 0 }).then(function () {
+            window.AV.post('/api/h5p/result', { contentId: blockId, score: 0, maxScore: 0 }).then(function () {
                 location.reload();
             }).catch(function (err) {
                 btn.disabled = false;

@@ -29,7 +29,7 @@ final class H5pController extends Controller
      */
     protected function csrfExempt(): bool
     {
-        return (bool) preg_match('#^/api/h5p/\d+/(result|state)(/\d+)?$#', $this->request->path());
+        return (bool) preg_match('#^/api/h5p/(result|state/\d+/\d+)$#', $this->request->path());
     }
 
     /** Sube un paquete .h5p y crea el bloque dentro de la unidad. */
@@ -75,9 +75,14 @@ final class H5pController extends Controller
      * con {contentId, score, maxScore, ...}. El resultado NO se revela aquí:
      * queda pendiente de liberación por el docente.
      */
-    public function result(int $id): void
+    public function result(): void
     {
         Auth::requireRole('STUDENT');
+
+        $id = (int) $this->request->input('contentId', 0);
+        if ($id <= 0) {
+            throw HttpException::unprocessable('Identificador de contenido inválido.');
+        }
 
         // El runtime envía form-urlencoded (score/maxScore); el botón de envío de
         // ensayos usa JSON. Se admite cualquiera de los dos.
