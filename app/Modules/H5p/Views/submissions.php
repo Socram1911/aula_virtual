@@ -51,38 +51,40 @@ foreach ($submissions as $s) {
                     </td>
                     <td>
                         <?php if ($stateAnswerText !== null || $subStates !== []): ?>
-                            <details>
-                                <summary class="small text-primary">Ver respuesta</summary>
-                                <div class="border rounded p-2 mt-1 small" style="max-height:280px;overflow:auto">
-                                    <?php if ($stateAnswerText !== null): ?>
-                                        <strong>Texto enviado:</strong>
-                                        <div class="mb-2"><?= nl2br(e($stateAnswerText)) ?></div>
-                                    <?php endif; ?>
-                                    <?php foreach ($subStates as $st): ?>
-                                        <?php
-                                            $stAnswer = $st['answer_text'] ?? null;
-                                            $stPretty = null;
-                                            if (! empty($st['state'])) {
-                                                $decoded = json_decode((string) $st['state'], true);
-                                                if (is_array($decoded)) {
-                                                    $stPretty = json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-                                                }
+                            <button type="button" class="btn btn-sm btn-outline-primary view-answers"
+                                    data-sid="<?= (int) $s['id'] ?>"
+                                    data-student="<?= e($s['last_name'] . ', ' . $s['first_name']) ?>">
+                                Ver respuestas
+                            </button>
+                            <div class="d-none" id="answers-<?= (int) $s['id'] ?>">
+                                <?php if ($stateAnswerText !== null): ?>
+                                    <strong>Texto enviado:</strong>
+                                    <div class="mb-2"><?= nl2br(e($stateAnswerText)) ?></div>
+                                <?php endif; ?>
+                                <?php foreach ($subStates as $st): ?>
+                                    <?php
+                                        $stAnswer = $st['answer_text'] ?? null;
+                                        $stPretty = null;
+                                        if (! empty($st['state'])) {
+                                            $decoded = json_decode((string) $st['state'], true);
+                                            if (is_array($decoded)) {
+                                                $stPretty = json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
                                             }
-                                        ?>
-                                        <?php if ($stAnswer !== null || $stPretty !== null): ?>
-                                            <div class="border-top pt-1 mt-1">
-                                                <span class="text-muted">Pregunta #<?= (int) $st['sub_content_id'] ?>:</span>
-                                                <?php if ($stAnswer !== null && $stAnswer !== ''): ?>
-                                                    <div><?= nl2br(e($stAnswer)) ?></div>
-                                                <?php endif; ?>
-                                                <?php if ($stPretty !== null): ?>
-                                                    <pre class="mb-0 mt-1"><?= e($stPretty) ?></pre>
-                                                <?php endif; ?>
-                                            </div>
-                                        <?php endif; ?>
-                                    <?php endforeach; ?>
-                                </div>
-                            </details>
+                                        }
+                                    ?>
+                                    <?php if ($stAnswer !== null || $stPretty !== null): ?>
+                                        <div class="border-top pt-2 mt-2">
+                                            <span class="text-muted">Pregunta #<?= (int) $st['sub_content_id'] ?>:</span>
+                                            <?php if ($stAnswer !== null && $stAnswer !== ''): ?>
+                                                <div><?= nl2br(e($stAnswer)) ?></div>
+                                            <?php endif; ?>
+                                            <?php if ($stPretty !== null): ?>
+                                                <pre class="mb-0 mt-1"><?= e($stPretty) ?></pre>
+                                            <?php endif; ?>
+                                        </div>
+                                    <?php endif; ?>
+                                <?php endforeach; ?>
+                            </div>
                         <?php else: ?>
                             <span class="text-muted small">Sin datos capturados.</span>
                         <?php endif; ?>
@@ -116,3 +118,30 @@ foreach ($submissions as $s) {
         </table>
     </div>
 </div>
+
+<!-- Modal de respuestas del estudiante -->
+<div class="modal fade" id="answers-modal" tabindex="-1" aria-labelledby="answers-modal-title" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="answers-modal-title">Respuestas</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body small" id="answers-modal-body"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('click', function (ev) {
+    var btn = ev.target.closest('.view-answers');
+    if (!btn) { return; }
+    var content = document.getElementById('answers-' + btn.dataset.sid);
+    document.getElementById('answers-modal-title').textContent = 'Respuestas de ' + btn.dataset.student;
+    document.getElementById('answers-modal-body').innerHTML = content ? content.innerHTML : '<p class="text-muted mb-0">Sin datos capturados.</p>';
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('answers-modal')).show();
+});
+</script>
