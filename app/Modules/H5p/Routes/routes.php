@@ -11,6 +11,8 @@ Router::get('/h5p/{id}/{path}', "{$c}@serve");
 Router::post('/api/h5p/{id}/result', "{$c}@result");
 Router::get('/api/h5p/{id}/state', "{$c}@state");
 Router::post('/api/h5p/{id}/state', "{$c}@state");
+Router::get('/api/h5p/{id}/state/{sub}', "{$c}@state");
+Router::post('/api/h5p/{id}/state/{sub}', "{$c}@state");
 Router::get('/api/h5p/{id}/submission', "{$c}@mySubmission");
 Router::get('/saber-assignments/{assignmentId}/h5p/{blockId}/submissions', "{$c}@submissions");
 Router::post('/saber-assignments/{assignmentId}/h5p/{blockId}/release', "{$c}@release");

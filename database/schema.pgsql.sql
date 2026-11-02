@@ -334,8 +334,14 @@ CREATE TABLE IF NOT EXISTS h5p_states (
     id BIGSERIAL PRIMARY KEY,
     student_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     block_id BIGINT NOT NULL REFERENCES content_blocks(id) ON DELETE CASCADE,
+    sub_content_id INTEGER NOT NULL DEFAULT 0,
     state JSONB NOT NULL,
     answer_text TEXT NULL,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (student_id, block_id)
+    UNIQUE (student_id, block_id, sub_content_id)
 );
+
+-- Migración de h5p_states existente: añadir sub_content_id (idempotente).
+ALTER TABLE h5p_states ADD COLUMN IF NOT EXISTS sub_content_id INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE h5p_states DROP CONSTRAINT IF EXISTS h5p_states_student_id_block_id_key;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_h5p_state ON h5p_states (student_id, block_id, sub_content_id);

@@ -34,16 +34,10 @@ foreach ($submissions as $s) {
             <tbody>
             <?php foreach ($submissions as $s): ?>
                 <?php
-                    $answerText = $s['answer_text'] !== null && $s['answer_text'] !== ''
+                    $stateAnswerText = $s['answer_text'] !== null && $s['answer_text'] !== ''
                         ? $s['answer_text']
-                        : ($s['state_answer'] ?? null);
-                    $statePretty = null;
-                    if (! empty($s['state_json'])) {
-                        $decoded = json_decode((string) $s['state_json'], true);
-                        if (is_array($decoded)) {
-                            $statePretty = json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-                        }
-                    }
+                        : null;
+                    $subStates = $s['states'] ?? [];
                 ?>
                 <tr>
                     <td><?= e($s['last_name'] . ', ' . $s['first_name']) ?><div class="small text-muted"><?= e($s['email']) ?></div></td>
@@ -52,22 +46,41 @@ foreach ($submissions as $s) {
                         <?php if (! empty($s['auto_graded'])): ?>
                             <span class="badge bg-info text-dark">Auto</span>
                         <?php else: ?>
-                            <span class="badge bg-warning text-dark">Manual (ensayo)</span>
+                            <span class="badge bg-warning text-dark">Manual</span>
                         <?php endif; ?>
                     </td>
                     <td>
-                        <?php if ($answerText !== null || $statePretty !== null): ?>
+                        <?php if ($stateAnswerText !== null || $subStates !== []): ?>
                             <details>
                                 <summary class="small text-primary">Ver respuesta</summary>
-                                <div class="border rounded p-2 mt-1 small" style="max-height:240px;overflow:auto">
-                                    <?php if ($answerText !== null && $answerText !== ''): ?>
-                                        <strong>Texto:</strong>
-                                        <div class="mb-2"><?= nl2br(e($answerText)) ?></div>
+                                <div class="border rounded p-2 mt-1 small" style="max-height:280px;overflow:auto">
+                                    <?php if ($stateAnswerText !== null): ?>
+                                        <strong>Texto enviado:</strong>
+                                        <div class="mb-2"><?= nl2br(e($stateAnswerText)) ?></div>
                                     <?php endif; ?>
-                                    <?php if ($statePretty !== null): ?>
-                                        <strong>Estado completo (H5P):</strong>
-                                        <pre class="mb-0 mt-1"><?= e($statePretty) ?></pre>
-                                    <?php endif; ?>
+                                    <?php foreach ($subStates as $st): ?>
+                                        <?php
+                                            $stAnswer = $st['answer_text'] ?? null;
+                                            $stPretty = null;
+                                            if (! empty($st['state'])) {
+                                                $decoded = json_decode((string) $st['state'], true);
+                                                if (is_array($decoded)) {
+                                                    $stPretty = json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                                                }
+                                            }
+                                        ?>
+                                        <?php if ($stAnswer !== null || $stPretty !== null): ?>
+                                            <div class="border-top pt-1 mt-1">
+                                                <span class="text-muted">Pregunta #<?= (int) $st['sub_content_id'] ?>:</span>
+                                                <?php if ($stAnswer !== null && $stAnswer !== ''): ?>
+                                                    <div><?= nl2br(e($stAnswer)) ?></div>
+                                                <?php endif; ?>
+                                                <?php if ($stPretty !== null): ?>
+                                                    <pre class="mb-0 mt-1"><?= e($stPretty) ?></pre>
+                                                <?php endif; ?>
+                                            </div>
+                                        <?php endif; ?>
+                                    <?php endforeach; ?>
                                 </div>
                             </details>
                         <?php else: ?>
@@ -88,17 +101,13 @@ foreach ($submissions as $s) {
                         <?php endif; ?>
                     </td>
                     <td class="text-end">
-                        <?php if (empty($s['auto_graded'])): ?>
-                            <form method="post" action="<?= url('/api/h5p/submission/' . (int) $s['id'] . '/grade') ?>" class="d-flex gap-1 justify-content-end align-items-center">
-                                <?= csrf_field() ?>
-                                <input type="hidden" name="max_score" value="20">
-                                <input type="number" step="0.01" min="0" max="20" name="score" class="form-control form-control-sm" style="width:80px"
-                                       value="<?= $s['score'] !== null ? e((string) $s['score']) : '' ?>" placeholder="Nota /20">
-                                <button class="btn btn-sm btn-primary">Guardar</button>
-                            </form>
-                        <?php else: ?>
-                            <span class="text-muted small">—</span>
-                        <?php endif; ?>
+                        <form method="post" action="<?= url('/api/h5p/submission/' . (int) $s['id'] . '/grade') ?>" class="d-flex gap-1 justify-content-end align-items-center">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="max_score" value="20">
+                            <input type="number" step="0.01" min="0" max="20" name="score" class="form-control form-control-sm" style="width:80px"
+                                   value="<?= $s['score'] !== null ? e((string) $s['score']) : '' ?>" placeholder="Nota /20">
+                            <button class="btn btn-sm btn-primary">Guardar</button>
+                        </form>
                     </td>
                 </tr>
             <?php endforeach; ?>

@@ -190,14 +190,14 @@ final class H5pService
         $autoGraded = $maxScore > 0;
         $percentage = $autoGraded ? round(($score / $maxScore) * 100, 2) : null;
 
-        // Para contenidos sin puntaje (ensayos), copia el texto capturado.
+        // Copia el texto capturado de las sub-preguntas (ensayos) al enviar.
         $answerText = null;
-        if (! $autoGraded) {
-            $state = Connection::fetch(
-                'SELECT answer_text FROM h5p_states WHERE student_id = :s AND block_id = :b',
-                [':s' => $studentId, ':b' => $blockId]
-            );
-            $answerText = $state !== null ? $state['answer_text'] : null;
+        $states = Connection::fetchAll(
+            'SELECT answer_text FROM h5p_states WHERE student_id = :s AND block_id = :b AND answer_text IS NOT NULL ORDER BY sub_content_id',
+            [':s' => $studentId, ':b' => $blockId]
+        );
+        if ($states !== []) {
+            $answerText = implode("\n\n", array_map(fn ($r) => (string) $r['answer_text'], $states));
         }
 
         Connection::run(
@@ -260,16 +260,30 @@ final class H5pService
     /** Entregas de un bloque (para la pantalla de corrección del docente). */
     public function submissionsForBlock(int $blockId): array
     {
-        return Connection::fetchAll(
-            'SELECT hs.*, st.state AS state_json, st.answer_text AS state_answer,
-                    u.first_name, u.last_name, u.email
+        $subs = Connection::fetchAll(
+            'SELECT hs.*, u.first_name, u.last_name, u.email
              FROM h5p_submissions hs
              JOIN users u ON u.id = hs.student_id
-             LEFT JOIN h5p_states st ON st.student_id = hs.student_id AND st.block_id = hs.block_id
              WHERE hs.block_id = :b
              ORDER BY hs.submitted_at ASC',
             [':b' => $blockId]
         );
+
+        // Estados capturados (respuestas de ensayos / sub-preguntas), por estudiante.
+        $states = Connection::fetchAll(
+            'SELECT student_id, sub_content_id, state, answer_text
+             FROM h5p_states WHERE block_id = :b ORDER BY student_id, sub_content_id',
+            [':b' => $blockId]
+        );
+        $statesByStudent = [];
+        foreach ($states as $st) {
+            $statesByStudent[(int) $st['student_id']][] = $st;
+        }
+        foreach ($subs as &$s) {
+            $s['states'] = $statesByStudent[(int) $s['student_id']] ?? [];
+        }
+
+        return $subs;
     }
 
     /**
@@ -354,25 +368,31 @@ final class H5pService
 
     /**
      * Guarda el estado de contenido (contentUserData) del runtime H5P. Se usa
-     * para capturar la respuesta de los ensayos (H5P.Essay).
+     * para capturar la respuesta de los ensayos (H5P.Essay) y de las
+     * sub-preguntas (subContentId) dentro de QuestionSet/Quiz.
      */
-    public function saveState(int $studentId, int $blockId, array $data): void
+    public function saveState(int $studentId, int $blockId, array $data, int $subContentId = 0): void
     {
         $this->findBlock($blockId);
         $state = json_encode($data, JSON_UNESCAPED_UNICODE);
 
-        // Extrae el texto del ensayo si viene en el estado.
-        $answer = $data['answer'] ?? null;
-        $answerText = is_string($answer) ? $answer : null;
+        // H5P.Essay guarda el texto en "inputField"; otros tipos usan "answer".
+        $answerText = null;
+        if (isset($data['inputField']) && is_string($data['inputField'])) {
+            $answerText = $data['inputField'];
+        } elseif (isset($data['answer']) && is_string($data['answer'])) {
+            $answerText = $data['answer'];
+        }
 
         Connection::run(
-            'INSERT INTO h5p_states (student_id, block_id, state, answer_text, updated_at)
-             VALUES (:s, :b, :state, :answer, :at)'
-            . Connection::onConflict('student_id, block_id')
+            'INSERT INTO h5p_states (student_id, block_id, sub_content_id, state, answer_text, updated_at)
+             VALUES (:s, :b, :sub, :state, :answer, :at)'
+            . Connection::onConflict('student_id, block_id, sub_content_id')
             . 'state = :state, answer_text = :answer, updated_at = :at',
             [
                 ':s' => $studentId,
                 ':b' => $blockId,
+                ':sub' => $subContentId,
                 ':state' => $state,
                 ':answer' => $answerText,
                 ':at' => date('Y-m-d H:i:s'),
@@ -380,12 +400,12 @@ final class H5pService
         );
     }
 
-    /** Devuelve el estado guardado de un estudiante en un bloque. */
-    public function loadState(int $studentId, int $blockId): ?array
+    /** Devuelve el estado guardado de un estudiante en un bloque (y sub-contenido). */
+    public function loadState(int $studentId, int $blockId, int $subContentId = 0): ?array
     {
         $row = Connection::fetch(
-            'SELECT state FROM h5p_states WHERE student_id = :s AND block_id = :b',
-            [':s' => $studentId, ':b' => $blockId]
+            'SELECT state FROM h5p_states WHERE student_id = :s AND block_id = :b AND sub_content_id = :sub',
+            [':s' => $studentId, ':b' => $blockId, ':sub' => $subContentId]
         );
         if ($row === null) {
             return null;

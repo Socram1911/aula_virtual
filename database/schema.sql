@@ -380,10 +380,16 @@ CREATE TABLE IF NOT EXISTS h5p_states (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     student_id INT UNSIGNED NOT NULL,
     block_id INT UNSIGNED NOT NULL,
+    sub_content_id INT NOT NULL DEFAULT 0,
     state JSON NOT NULL,
     answer_text TEXT NULL,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_h5p_state (student_id, block_id),
+    UNIQUE KEY uq_h5p_state (student_id, block_id, sub_content_id),
     CONSTRAINT fk_h5p_state_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT fk_h5p_state_block FOREIGN KEY (block_id) REFERENCES content_blocks(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Migración de h5p_states existente: añadir sub_content_id (idempotente).
+ALTER TABLE h5p_states ADD COLUMN IF NOT EXISTS sub_content_id INT NOT NULL DEFAULT 0;
+ALTER TABLE h5p_states DROP INDEX uq_h5p_state;
+ALTER TABLE h5p_states ADD UNIQUE KEY uq_h5p_state (student_id, block_id, sub_content_id);

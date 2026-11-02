@@ -29,7 +29,7 @@ final class H5pController extends Controller
      */
     protected function csrfExempt(): bool
     {
-        return (bool) preg_match('#^/api/h5p/\d+/(result|state)$#', $this->request->path());
+        return (bool) preg_match('#^/api/h5p/\d+/(result|state)(/\d+)?$#', $this->request->path());
     }
 
     /** Sube un paquete .h5p y crea el bloque dentro de la unidad. */
@@ -99,15 +99,15 @@ final class H5pController extends Controller
     /**
      * API: estado de contenido (contentUserData) del runtime H5P.
      * GET devuelve el estado guardado; POST lo guarda (captura el texto de los
-     * ensayos H5P.Essay).
+     * ensayos H5P.Essay y las sub-preguntas, vía subContentId).
      */
-    public function state(int $id): void
+    public function state(int $id, int $sub = 0): void
     {
         Auth::requireRole('STUDENT');
         $studentId = (int) Auth::id();
 
         if ($this->request->method() === 'GET') {
-            $state = $this->service->loadState($studentId, $id);
+            $state = $this->service->loadState($studentId, $id, $sub);
             header('Content-Type: application/json');
             echo json_encode($state ?? new \stdClass());
             exit;
@@ -118,7 +118,7 @@ final class H5pController extends Controller
         if (! is_array($decoded)) {
             $decoded = [];
         }
-        $this->service->saveState($studentId, $id, $decoded);
+        $this->service->saveState($studentId, $id, $decoded, $sub);
         $this->json(['data' => ['saved' => true]]);
     }
 

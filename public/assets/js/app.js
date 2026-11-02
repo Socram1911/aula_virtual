@@ -81,7 +81,7 @@
                     saveFreq: 60,
                     ajax: {
                         setFinishedUrl: '/api/h5p/' + blockId + '/result',
-                        contentUserDataUrl: '/api/h5p/' + blockId + '/state'
+                        contentUserDataUrl: '/api/h5p/' + blockId + '/state/:subContentId'
                     }
                 }).catch(function (err) {
                     console.error('No se pudo cargar el contenido H5P:', err);
