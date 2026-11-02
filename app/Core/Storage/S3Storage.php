@@ -57,6 +57,23 @@ final class S3Storage
         ]);
     }
 
+    /** Descarga el contenido de un objeto como cadena. */
+    public function getString(string $key): string
+    {
+        $result = $this->client()->getObject([
+            'Bucket' => $this->bucket(),
+            'Key' => $key,
+        ]);
+        $body = $result['Body'] ?? null;
+        if ($body instanceof StreamInterface) {
+            if ($body->isSeekable()) {
+                $body->rewind();
+            }
+            return $body->getContents();
+        }
+        return (string) $body;
+    }
+
     /** Elimina un objeto. */
     public function delete(string $key): void
     {

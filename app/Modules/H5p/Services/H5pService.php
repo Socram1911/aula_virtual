@@ -279,11 +279,140 @@ final class H5pService
         foreach ($states as $st) {
             $statesByStudent[(int) $st['student_id']][] = $st;
         }
+
+        // Preguntas del contenido para mostrar respuestas legibles (texto + opciones).
+        $questions = $this->contentQuestions($blockId);
+
         foreach ($subs as &$s) {
             $s['states'] = $statesByStudent[(int) $s['student_id']] ?? [];
+            $s['friendly'] = $this->formatAnswers($questions, $s['states']);
         }
 
         return $subs;
+    }
+
+    /**
+     * Preguntas del contenido H5P (texto y opciones), para traducir las
+     * respuestas guardadas (índices) a texto legible. Devuelve null si no se
+     * puede leer/interpretar content.json.
+     *
+     * @return array<int, array{library: string, is_essay: bool, question: string, options: string[]}>|null
+     */
+    public function contentQuestions(int $blockId): ?array
+    {
+        try {
+            $json = (new S3Storage())->getString('h5p/' . $blockId . '/content/content.json');
+        } catch (\Throwable $e) {
+            return null;
+        }
+        $data = json_decode($json, true);
+        if (! is_array($data)) {
+            return null;
+        }
+
+        if (isset($data['questions']) && is_array($data['questions'])) {
+            return array_map([$this, 'normalizeQuestion'], $data['questions']);
+        }
+
+        // Contenido individual (sin lista de preguntas): se usa mainLibrary.
+        $settings = $this->findBlock($blockId)->settingsArray();
+        return [$this->normalizeQuestion(['library' => $settings['mainLibrary'] ?? '', 'params' => $data])];
+    }
+
+    /** @return array{library: string, is_essay: bool, question: string, options: string[]} */
+    private function normalizeQuestion(array $q): array
+    {
+        $library = (string) ($q['library'] ?? '');
+        $params = is_array($q['params'] ?? null) ? $q['params'] : [];
+        $isEssay = str_starts_with($library, 'H5P.Essay');
+
+        if ($isEssay) {
+            $text = trim(strip_tags((string) ($params['taskDescription'] ?? $params['question'] ?? '')));
+            return ['library' => $library, 'is_essay' => true, 'question' => $text, 'options' => []];
+        }
+
+        $text = trim(strip_tags((string) ($params['question'] ?? $params['taskDescription'] ?? '')));
+        $options = [];
+        foreach (($params['answers'] ?? []) as $o) {
+            $options[] = trim(strip_tags((string) ($o['text'] ?? '')));
+        }
+
+        return ['library' => $library, 'is_essay' => false, 'question' => $text, 'options' => $options];
+    }
+
+    /**
+     * Convierte los estados capturados en líneas legibles (pregunta → respuesta).
+     *
+     * @return array<int, array{question: string, answer: string}>
+     */
+    private function formatAnswers(?array $questions, array $states): array
+    {
+        if ($questions === null) {
+            return [];
+        }
+
+        $lines = [];
+        foreach ($states as $st) {
+            $raw = is_string($st['state'] ?? null) ? json_decode($st['state'], true) : null;
+            if (! is_array($raw)) {
+                continue;
+            }
+
+            // Estado de QuestionSet/Quiz: {order, answers, progress}.
+            if (isset($raw['order']) && isset($raw['answers']) && is_array($raw['answers'])) {
+                $order = is_array($raw['order']) ? $raw['order'] : [];
+                foreach ($order as $i => $qIdx) {
+                    if (! isset($questions[$qIdx])) {
+                        continue;
+                    }
+                    $lines[] = $this->formatOneAnswer($questions[$qIdx], $raw['answers'][$i] ?? null);
+                }
+                continue;
+            }
+
+            // Estado individual (p. ej. H5P.Essay standalone).
+            if ($questions[0] ?? null) {
+                $lines[] = $this->formatOneAnswer($questions[0], $raw);
+            }
+        }
+
+        return $lines;
+    }
+
+    /** @return array{question: string, answer: string} */
+    private function formatOneAnswer(array $q, mixed $ans): array
+    {
+        $question = $q['question'] ?? '';
+        $answer = '(sin responder)';
+
+        if ($q['is_essay'] ?? false) {
+            if (is_array($ans) && isset($ans['inputField']) && is_string($ans['inputField'])) {
+                $answer = $ans['inputField'] !== '' ? $ans['inputField'] : '(sin responder)';
+            } elseif (is_array($ans) && isset($ans['answer']) && is_string($ans['answer'])) {
+                $answer = $ans['answer'] !== '' ? $ans['answer'] : '(sin responder)';
+            } elseif (is_string($ans) && $ans !== '') {
+                $answer = $ans;
+            }
+        } else {
+            $selected = [];
+            if (is_array($ans) && isset($ans['answers']) && is_array($ans['answers'])) {
+                $selected = array_map('intval', $ans['answers']);
+            } elseif (is_array($ans)) {
+                $selected = array_map('intval', $ans);
+            }
+            $options = $q['options'] ?? [];
+            if ($selected !== []) {
+                $parts = [];
+                foreach ($selected as $idx) {
+                    $parts[] = isset($options[$idx]) && $options[$idx] !== ''
+                        ? $options[$idx]
+                        : ('Opción ' . ($idx + 1));
+                }
+                $answer = implode('; ', $parts);
+            }
+        }
+
+        return ['question' => $question, 'answer' => $answer];
     }
 
     /**

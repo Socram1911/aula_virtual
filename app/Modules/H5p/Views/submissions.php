@@ -37,7 +37,6 @@ foreach ($submissions as $s) {
                     $stateAnswerText = $s['answer_text'] !== null && $s['answer_text'] !== ''
                         ? $s['answer_text']
                         : null;
-                    $subStates = $s['states'] ?? [];
                 ?>
                 <tr>
                     <td><?= e($s['last_name'] . ', ' . $s['first_name']) ?><div class="small text-muted"><?= e($s['email']) ?></div></td>
@@ -50,40 +49,61 @@ foreach ($submissions as $s) {
                         <?php endif; ?>
                     </td>
                     <td>
-                        <?php if ($stateAnswerText !== null || $subStates !== []): ?>
+                        <?php
+                            $friendly = $s['friendly'] ?? [];
+                            $hasFriendly = $friendly !== [];
+                            $hasStates = ($s['states'] ?? []) !== [];
+                        ?>
+                        <?php if ($hasFriendly || $stateAnswerText !== null || $hasStates): ?>
                             <button type="button" class="btn btn-sm btn-outline-primary view-answers"
                                     data-sid="<?= (int) $s['id'] ?>"
                                     data-student="<?= e($s['last_name'] . ', ' . $s['first_name']) ?>">
                                 Ver respuestas
                             </button>
                             <div class="d-none" id="answers-<?= (int) $s['id'] ?>">
-                                <?php if ($stateAnswerText !== null): ?>
+                                <?php if ($hasFriendly): ?>
+                                    <ol class="mb-0 ps-3">
+                                    <?php foreach ($friendly as $line): ?>
+                                        <li class="mb-2">
+                                            <?php if ($line['question'] !== ''): ?>
+                                                <div class="fw-semibold"><?= e($line['question']) ?></div>
+                                            <?php endif; ?>
+                                            <div><?= nl2br(e($line['answer'])) ?></div>
+                                        </li>
+                                    <?php endforeach; ?>
+                                    </ol>
+                                <?php endif; ?>
+
+                                <?php if (! $hasFriendly && $stateAnswerText !== null): ?>
                                     <strong>Texto enviado:</strong>
                                     <div class="mb-2"><?= nl2br(e($stateAnswerText)) ?></div>
                                 <?php endif; ?>
-                                <?php foreach ($subStates as $st): ?>
-                                    <?php
-                                        $stAnswer = $st['answer_text'] ?? null;
-                                        $stPretty = null;
-                                        if (! empty($st['state'])) {
-                                            $decoded = json_decode((string) $st['state'], true);
-                                            if (is_array($decoded)) {
-                                                $stPretty = json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+                                <?php if (! $hasFriendly && $hasStates): ?>
+                                    <?php foreach ($s['states'] as $st): ?>
+                                        <?php
+                                            $stAnswer = $st['answer_text'] ?? null;
+                                            $stPretty = null;
+                                            if (! empty($st['state'])) {
+                                                $decoded = json_decode((string) $st['state'], true);
+                                                if (is_array($decoded)) {
+                                                    $stPretty = json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                                                }
                                             }
-                                        }
-                                    ?>
-                                    <?php if ($stAnswer !== null || $stPretty !== null): ?>
-                                        <div class="border-top pt-2 mt-2">
-                                            <span class="text-muted">Pregunta #<?= (int) $st['sub_content_id'] ?>:</span>
-                                            <?php if ($stAnswer !== null && $stAnswer !== ''): ?>
-                                                <div><?= nl2br(e($stAnswer)) ?></div>
-                                            <?php endif; ?>
-                                            <?php if ($stPretty !== null): ?>
-                                                <pre class="mb-0 mt-1"><?= e($stPretty) ?></pre>
-                                            <?php endif; ?>
-                                        </div>
-                                    <?php endif; ?>
-                                <?php endforeach; ?>
+                                        ?>
+                                        <?php if ($stAnswer !== null || $stPretty !== null): ?>
+                                            <div class="border-top pt-2 mt-2">
+                                                <span class="text-muted">Pregunta #<?= (int) $st['sub_content_id'] ?>:</span>
+                                                <?php if ($stAnswer !== null && $stAnswer !== ''): ?>
+                                                    <div><?= nl2br(e($stAnswer)) ?></div>
+                                                <?php endif; ?>
+                                                <?php if ($stPretty !== null): ?>
+                                                    <pre class="mb-0 mt-1"><?= e($stPretty) ?></pre>
+                                                <?php endif; ?>
+                                            </div>
+                                        <?php endif; ?>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
                             </div>
                         <?php else: ?>
                             <span class="text-muted small">Sin datos capturados.</span>
