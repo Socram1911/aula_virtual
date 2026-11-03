@@ -58,47 +58,51 @@ final class GradeService
     }
 
     /**
-     * Calcula la calificación compuesta usando los componentes configurados.
-     * Si hay componentes por contenido H5P (block_id), promedia ponderado por
-     * contenido; si hay componentes por tipo, promedia por tipo; sin nada,
-     * promedia las evaluaciones. El resultado es un porcentaje (0-100).
+     * Calcula la calificación compuesta de una asignación para un estudiante.
+     *
+     * Con evaluaciones H5P (block_id): devuelve [puntos obtenidos, puntos totales]
+     * (suma directa de los valores de cada evaluación). Sin ellas, mantiene el
+     * comportamiento por pesos/tipos devolviendo [porcentaje, 100].
+     *
+     * @return array{0: float, 1: float} [obtenido, total]
      */
-    public function computeComposite(int $saberAssignmentId, int $studentId): float
+    public function computeComposite(int $saberAssignmentId, int $studentId): array
     {
         $components = Connection::fetchAll(
-            'SELECT source_type, weight, block_id FROM grade_components WHERE saber_assignment_id = :a ORDER BY position ASC',
+            'SELECT source_type, weight, value, block_id FROM grade_components WHERE saber_assignment_id = :a ORDER BY position ASC',
             [':a' => $saberAssignmentId]
         );
 
-        if ($components) {
-            $hasBlocks = false;
-            foreach ($components as $c) {
-                if (! empty($c['block_id'])) {
-                    $hasBlocks = true;
-                    break;
-                }
+        $hasBlocks = false;
+        foreach ($components as $c) {
+            if (! empty($c['block_id'])) {
+                $hasBlocks = true;
+                break;
             }
+        }
 
-            if ($hasBlocks) {
-                // Ponderado por contenido evaluable: solo cuenta lo ya calificado.
-                $total = 0.0;
-                $weightSum = 0.0;
-                foreach ($components as $c) {
-                    if (empty($c['block_id'])) {
-                        continue;
-                    }
-                    $pct = $this->percentageForBlock($saberAssignmentId, $studentId, (int) $c['block_id']);
-                    if ($pct === null) {
-                        continue;
-                    }
-                    $weight = (float) $c['weight'];
-                    $total += $pct * ($weight / 100);
-                    $weightSum += $weight;
-                }
-                return $weightSum > 0 ? round($total / ($weightSum / 100), 2) : 0.0;
-            }
-
+        if ($hasBlocks) {
+            // Modelo de puntos: la nota final es la suma de las notas de cada
+            // evaluación H5P, y el total es la suma de sus valores.
             $total = 0.0;
+            $obtained = 0.0;
+            foreach ($components as $c) {
+                if (empty($c['block_id'])) {
+                    continue;
+                }
+                $value = (float) $c['value'];
+                $total += $value;
+                $score = $this->scoreForBlock($saberAssignmentId, $studentId, (int) $c['block_id']);
+                if ($score !== null) {
+                    $obtained += $value > 0 ? min($score, $value) : $score;
+                }
+            }
+            return [round($obtained, 2), round($total, 2)];
+        }
+
+        if ($components) {
+            // Fallback: componentes por tipo con pesos (porcentaje).
+            $pct = 0.0;
             foreach ($components as $c) {
                 $sourceType = match ($c['source_type']) {
                     'ACTIVITIES' => 'ACTIVITY',
@@ -107,53 +111,63 @@ final class GradeService
                     default => 'PROJECT',
                 };
                 $avg = $this->averagePercentage($saberAssignmentId, $studentId, $sourceType);
-                $total += $avg * ((float) $c['weight'] / 100);
+                $pct += $avg * ((float) $c['weight'] / 100);
             }
-            return round($total, 2);
+            return [round($pct, 2), 100.0];
         }
 
         // Sin configuración: promedio de evaluaciones.
-        return $this->averagePercentage($saberAssignmentId, $studentId, 'ASSESSMENT');
+        return [$this->averagePercentage($saberAssignmentId, $studentId, 'ASSESSMENT'), 100.0];
     }
 
-    /** Porcentaje (0-100) de un estudiante en un contenido evaluable, o null si aún no hay nota. */
-    public function percentageForBlock(int $assignmentId, int $studentId, int $blockId): ?float
+    /** Puntos obtenidos (0..valor) de un estudiante en un contenido evaluable, o null. */
+    public function scoreForBlock(int $assignmentId, int $studentId, int $blockId): ?float
     {
         $row = Connection::fetch(
-            'SELECT percentage FROM grades
+            'SELECT score FROM grades
              WHERE saber_assignment_id = :a AND student_id = :s AND source_type = :h5p AND source_id = :b',
             [':a' => $assignmentId, ':s' => $studentId, ':h5p' => 'H5P', ':b' => $blockId]
         );
-        if ($row === null || $row['percentage'] === null) {
+        if ($row === null || $row['score'] === null) {
             return null;
         }
-        return (float) $row['percentage'];
+        return (float) $row['score'];
     }
 
-    /** Convierte un porcentaje (0-100) a nota sobre 20. */
-    public function to20(float $percentage): float
+    /** Valor en puntos asignado a un contenido evaluable en una asignación, o null. */
+    public function componentValue(int $assignmentId, int $blockId): ?float
     {
-        return round($percentage / 5, 2);
+        $row = Connection::fetch(
+            'SELECT value FROM grade_components WHERE saber_assignment_id = :a AND block_id = :b',
+            [':a' => $assignmentId, ':b' => $blockId]
+        );
+        if ($row === null || $row['value'] === null) {
+            return null;
+        }
+        return (float) $row['value'];
     }
 
-    /** Indica si una nota sobre 20 aprueba (umbral 12). */
-    public static function passes(float $note20): bool
+    /** Indica si una nota aprueba (umbral 12). */
+    public static function passes(float $note): bool
     {
-        return $note20 >= 12.0;
+        return $note >= 12.0;
     }
 
     /** Calcula y guarda la calificación compuesta de un estudiante en una asignación. */
     public function recordComposite(int $saberAssignmentId, int $studentId): float
     {
-        $percentage = $this->computeComposite($saberAssignmentId, $studentId);
-        $this->record($saberAssignmentId, $studentId, 'COMPOSITE', null, $percentage, $percentage);
-        return $percentage;
+        [$obtained, $total] = $this->computeComposite($saberAssignmentId, $studentId);
+        $percentage = $total > 0 ? round(($obtained / $total) * 100, 2) : 0.0;
+        $this->record($saberAssignmentId, $studentId, 'COMPOSITE', null, $obtained, $percentage);
+        return $obtained;
     }
 
-    /** Registra el resultado de un bloque H5P (fuente H5P). */
-    public function recordH5p(int $saberAssignmentId, int $studentId, int $blockId, float $score, float $percentage): void
+    /** Registra la nota (puntos) de un bloque H5P para una asignación. */
+    public function recordH5p(int $saberAssignmentId, int $studentId, int $blockId, float $grade): void
     {
-        $this->record($saberAssignmentId, $studentId, 'H5P', $blockId, $score, $percentage);
+        $value = $this->componentValue($saberAssignmentId, $blockId);
+        $percentage = ($value !== null && $value > 0) ? round(($grade / $value) * 100, 2) : 0.0;
+        $this->record($saberAssignmentId, $studentId, 'H5P', $blockId, $grade, $percentage);
     }
 
     private function averagePercentage(int $assignmentId, int $studentId, string $sourceType): float
@@ -214,16 +228,16 @@ final class GradeService
         try {
             Connection::run('DELETE FROM grade_components WHERE saber_assignment_id = :a', [':a' => $assignmentId]);
             $stmt = $pdo->prepare(
-                'INSERT INTO grade_components (saber_assignment_id, name, source_type, weight, position, block_id) VALUES (?, ?, ?, ?, ?, ?)'
+                'INSERT INTO grade_components (saber_assignment_id, name, source_type, value, position, block_id) VALUES (?, ?, ?, ?, ?, ?)'
             );
             $position = 0;
             foreach ($components as $c) {
                 $name = trim((string) ($c['name'] ?? ''));
                 $type = strtoupper((string) ($c['source_type'] ?? 'H5P'));
-                $weight = (float) ($c['weight'] ?? 0);
+                $value = (float) ($c['value'] ?? 0);
                 $blockId = ! empty($c['block_id']) ? (int) $c['block_id'] : null;
-                if ($name !== '' && $weight > 0) {
-                    $stmt->execute([$assignmentId, $name, $type, $weight, $position++, $blockId]);
+                if ($name !== '' && $value > 0) {
+                    $stmt->execute([$assignmentId, $name, $type, $value, $position++, $blockId]);
                 }
             }
             $pdo->commit();
@@ -239,6 +253,7 @@ final class GradeService
         return Connection::fetchAll(
             'SELECT u.id AS student_id, u.first_name, u.last_name, u.email,
                     COALESCE(ssp.percentage, 0) AS progress,
+                    (SELECT score FROM grades g WHERE g.saber_assignment_id = :a AND g.student_id = u.id AND g.source_type = :comp AND g.source_id IS NULL) AS grade_score,
                     (SELECT percentage FROM grades g WHERE g.saber_assignment_id = :a AND g.student_id = u.id AND g.source_type = :comp AND g.source_id IS NULL) AS grade_pct,
                     (SELECT grade_value FROM grades g WHERE g.saber_assignment_id = :a AND g.student_id = u.id AND g.source_type = :comp AND g.source_id IS NULL) AS grade_value
              FROM section_students ss

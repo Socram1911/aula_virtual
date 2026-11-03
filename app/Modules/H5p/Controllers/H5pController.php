@@ -136,6 +136,7 @@ final class H5pController extends Controller
             'title' => 'Evaluación H5P: ' . $block->title,
             'block' => $block,
             'assignmentId' => $assignmentId,
+            'maxValue' => (new GradeService())->componentValue($assignmentId, $blockId) ?? 20.0,
             'submissions' => $this->service->submissionsForBlock($blockId),
         ]);
     }
@@ -157,13 +158,13 @@ final class H5pController extends Controller
         $this->redirect(url('/saber-assignments/' . $assignmentId . '/h5p/' . $blockId . '/submissions'));
     }
 
-    /** Guarda la nota manual de una entrega (ensayo). */
+    /** Guarda la nota (puntos) de una entrega. */
     public function grade(int $submissionId): void
     {
         $this->requireRole(['ADMIN', 'TEACHER']);
-        $score = (float) $this->request->input('score', 0);
-        $maxScore = (float) $this->request->input('max_score', 20);
-        $this->service->gradeSubmission($submissionId, $score, $maxScore, (int) Auth::id());
+        $grade = (float) $this->request->input('grade', $this->request->input('score', 0));
+        $maxScore = (float) $this->request->input('max', $this->request->input('max_score', 20));
+        $this->service->gradeSubmission($submissionId, $grade, $maxScore, (int) Auth::id());
         Session::flash('_success', 'Nota guardada.');
         $this->back();
     }
@@ -175,8 +176,7 @@ final class H5pController extends Controller
         $sub = $this->service->submissionFor((int) Auth::id(), $blockId);
         $data = $sub === null ? null : [
             'status' => $sub['status'],
-            'percentage' => $sub['percentage'] !== null ? (float) $sub['percentage'] : null,
-            'note20' => $sub['percentage'] !== null ? (new GradeService())->to20((float) $sub['percentage']) : null,
+            'grade' => $sub['grade'] !== null ? (float) $sub['grade'] : null,
         ];
         $this->json(['data' => $data]);
     }

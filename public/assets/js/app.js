@@ -115,11 +115,9 @@
                         return;
                     }
                     if (sub.status === 'RELEASED') {
-                        var nota = sub.note20;
-                        var ok = nota >= 12;
-                        el.innerHTML = '<div class="alert ' + (ok ? 'alert-success' : 'alert-danger') + ' mb-0">' +
-                            '<strong>Evaluación completada.</strong> Nota: <strong>' + nota + '/20</strong> — ' +
-                            (ok ? 'Aprobado' : 'Reprobado') + '</div>';
+                        var nota = sub.grade;
+                        el.innerHTML = '<div class="alert alert-success mb-0">' +
+                            '<strong>Evaluación completada.</strong> Nota: <strong>' + nota + '</strong></div>';
                     } else {
                         el.innerHTML = '<div class="alert alert-info mb-0">Evaluación enviada. Los resultados se publicarán cuando el docente lo habilite.</div>';
                     }

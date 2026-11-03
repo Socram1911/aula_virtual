@@ -6,7 +6,7 @@ foreach ($components as $c) {
         $componentByBlock[(int) $c['block_id']] = $c;
     }
 }
-$to20 = fn ($pct) => number_format(((float) $pct) / 5, 2, '.', '');
+$totalValue = array_sum(array_map(fn ($c) => (float) $c['value'], $components));
 ?>
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1 class="h4 mb-0"><?= e($assignment->saber_name) ?> — <?= e($assignment->sectionLabel()) ?></h1>
@@ -37,7 +37,7 @@ $to20 = fn ($pct) => number_format(((float) $pct) / 5, 2, '.', '');
         <div class="card card-av mb-3">
             <div class="card-body">
                 <h2 class="h6">Configuración de calificaciones</h2>
-                <p class="small text-muted">Asigne un peso (%) a cada contenido H5P evaluable del Saber. La nota final se calcula con el promedio ponderado y se expresa sobre 20 (aprueba con 12).</p>
+                <p class="small text-muted">Asigne el <strong>valor en puntos</strong> de cada contenido H5P evaluable (puede ser cualquier número: 20, 25, 1.25, etc.). Este valor es el máximo de la nota de esa evaluación.</p>
                 <?php if (! $evaluableBlocks): ?>
                     <div class="alert alert-info small mb-0">Este Saber aún no tiene contenido H5P evaluable.</div>
                 <?php else: ?>
@@ -55,14 +55,15 @@ $to20 = fn ($pct) => number_format(((float) $pct) / 5, 2, '.', '');
                                 </div>
                                 <div class="col-4">
                                     <div class="input-group input-group-sm">
-                                        <input type="number" step="0.01" min="0" name="components[<?= $i ?>][weight]" class="form-control" value="<?= e($prev['weight'] ?? '') ?>" placeholder="%">
-                                        <span class="input-group-text">%</span>
+                                        <input type="number" step="0.01" min="0" name="components[<?= $i ?>][value]" class="form-control" value="<?= e($prev['value'] ?? '') ?>" placeholder="Puntos">
+                                        <span class="input-group-text">pts</span>
                                     </div>
                                 </div>
                             </div>
                         <?php endforeach; ?>
                     </div>
-                    <button class="btn btn-sm btn-primary">Guardar pesos</button>
+                    <div class="small mb-2">Total: <strong><?= e(number_format($totalValue, 2)) ?></strong> puntos</div>
+                    <button class="btn btn-sm btn-primary">Guardar valores</button>
                 </form>
                 <?php endif; ?>
             </div>
@@ -92,7 +93,7 @@ $to20 = fn ($pct) => number_format(((float) $pct) / 5, 2, '.', '');
                 <h2 class="h6">Estudiantes: progreso y calificación</h2>
                 <div class="table-responsive">
                     <table class="table table-sm align-middle mb-0">
-                        <thead class="table-light"><tr><th>Estudiante</th><th>Progreso</th><th>Nota (20)</th></tr></thead>
+                        <thead class="table-light"><tr><th>Estudiante</th><th>Progreso</th><th>Nota</th></tr></thead>
                         <tbody>
                         <?php foreach ($students as $st): ?>
                             <tr>
@@ -104,11 +105,8 @@ $to20 = fn ($pct) => number_format(((float) $pct) / 5, 2, '.', '');
                                     <?= (int) round($st['progress']) ?>%
                                 </td>
                                 <td>
-                                    <?php if ($st['grade_value'] !== null): ?>
-                                        <strong><?= e($to20($st['grade_value'])) ?></strong>
-                                        <span class="badge <?= (float) $to20($st['grade_value']) >= 12 ? 'bg-success' : 'bg-danger' ?> ms-1">
-                                            <?= (float) $to20($st['grade_value']) >= 12 ? 'Aprobado' : 'Reprobado' ?>
-                                        </span>
+                                    <?php if ($st['grade_score'] !== null): ?>
+                                        <strong><?= e(number_format((float) $st['grade_score'], 2)) ?></strong>
                                     <?php else: ?>—<?php endif; ?>
                                 </td>
                             </tr>

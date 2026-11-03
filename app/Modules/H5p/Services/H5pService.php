@@ -257,6 +257,69 @@ final class H5pService
         }));
     }
 
+    /**
+     * Evaluaciones H5P pendientes de un estudiante (contenido evaluable de sus
+     * Saberes asignados que aún no ha enviado).
+     */
+    public function pendingEvaluationsForStudent(int $studentId): array
+    {
+        $rows = Connection::fetchAll(
+            'SELECT cb.id AS block_id, cb.title, cb.settings,
+                    u.id AS unit_id, u.title AS unit_title, u.position AS unit_position,
+                    s.name AS saber_name
+             FROM content_blocks cb
+             JOIN units u ON u.id = cb.unit_id AND u.status = :upub
+             JOIN sabers s ON s.id = u.saber_id
+             JOIN saber_assignments sa ON sa.saber_id = u.saber_id AND sa.status = :pub
+             JOIN section_students ss ON ss.section_id = sa.section_id AND ss.student_id = :s AND ss.status = :enr
+             WHERE cb.type = :t AND cb.status = :active
+             ORDER BY s.name, u.position, cb.position',
+            [
+                ':s' => $studentId,
+                ':enr' => 'ENROLLED',
+                ':pub' => 'PUBLISHED',
+                ':upub' => 'PUBLISHED',
+                ':t' => 'H5P',
+                ':active' => 'ACTIVE',
+            ]
+        );
+
+        $submitted = $this->submittedBlockIds($studentId);
+
+        return array_values(array_filter($rows, function (array $r) use ($submitted): bool {
+            $settings = is_string($r['settings'] ?? null) ? json_decode($r['settings'], true) : null;
+            $evaluable = is_array($settings) && ($settings['evaluable'] ?? false) === true;
+            return $evaluable && ! in_array((int) $r['block_id'], $submitted, true);
+        }));
+    }
+
+    /** Notas (puntos) de un estudiante en sus evaluaciones H5P, por Saber. */
+    public function gradesForStudent(int $studentId): array
+    {
+        return Connection::fetchAll(
+            'SELECT g.score AS grade, gc.value AS max_value, g.graded_at,
+                    cb.title AS block_title, u.title AS unit_title, s.name AS saber_name
+             FROM grades g
+             JOIN saber_assignments sa ON sa.id = g.saber_assignment_id
+             JOIN sabers s ON s.id = sa.saber_id
+             LEFT JOIN content_blocks cb ON cb.id = g.source_id
+             LEFT JOIN units u ON u.id = cb.unit_id
+             LEFT JOIN grade_components gc ON gc.saber_assignment_id = g.saber_assignment_id AND gc.block_id = g.source_id
+             WHERE g.student_id = :s AND g.source_type = :h5p
+             ORDER BY s.name, g.graded_at DESC',
+            [':s' => $studentId, ':h5p' => 'H5P']
+        );
+    }
+
+    /** Ids de bloques ya enviados por un estudiante. */
+    private function submittedBlockIds(int $studentId): array
+    {
+        return array_map('intval', array_column(Connection::fetchAll(
+            'SELECT block_id FROM h5p_submissions WHERE student_id = :s',
+            [':s' => $studentId]
+        ), 'block_id'));
+    }
+
     /** Entregas de un bloque (para la pantalla de corrección del docente). */
     public function submissionsForBlock(int $blockId): array
     {
@@ -416,10 +479,11 @@ final class H5pService
     }
 
     /**
-     * Guarda la nota manual de una entrega (ensayo). El docente asigna un puntaje
-     * sobre max_score (por defecto 20). No libera todavía.
+     * Guarda la nota (puntos) de una entrega. El docente asigna un valor entre 0
+     * y maxScore (el valor de la evaluación configurado en la asignación). No
+     * libera todavía.
      */
-    public function gradeSubmission(int $submissionId, float $score, float $maxScore, int $graderId): void
+    public function gradeSubmission(int $submissionId, float $grade, float $maxScore, int $graderId): void
     {
         $sub = Connection::fetch('SELECT * FROM h5p_submissions WHERE id = :id', [':id' => $submissionId]);
         if ($sub === null) {
@@ -428,26 +492,26 @@ final class H5pService
         if ($maxScore <= 0) {
             $maxScore = 20.0;
         }
-        if ($score < 0) {
-            $score = 0.0;
+        if ($grade < 0) {
+            $grade = 0.0;
         }
-        if ($score > $maxScore) {
-            $score = $maxScore;
+        if ($grade > $maxScore) {
+            $grade = $maxScore;
         }
-        $percentage = round(($score / $maxScore) * 100, 2);
 
         Connection::run(
             'UPDATE h5p_submissions
-             SET score = :score, max_score = :max, percentage = :pct, auto_graded = FALSE, graded_by = :gb, graded_at = :at
+             SET grade = :grade, auto_graded = FALSE, graded_by = :gb, graded_at = :at
              WHERE id = :id',
-            [':score' => $score, ':max' => $maxScore, ':pct' => $percentage, ':gb' => $graderId, ':at' => date('Y-m-d H:i:s'), ':id' => $submissionId]
+            [':grade' => $grade, ':gb' => $graderId, ':at' => date('Y-m-d H:i:s'), ':id' => $submissionId]
         );
     }
 
     /**
      * Libera los resultados de un bloque evaluable (todos los estudiantes).
-     * Requiere que todas las entregas tengan nota (los ensayos deben corregirse
-     * antes). Registra la nota en `grades` y recalcula la compuesta.
+     * Requiere que todas las entregas tengan nota en puntos (los ensayos deben
+     * corregirse antes; las de opción múltiple se calculan automáticamente).
+     * Registra la nota en `grades` y recalcula la compuesta.
      *
      * @return int número de entregas liberadas
      */
@@ -461,7 +525,7 @@ final class H5pService
 
         $pending = $this->submissionsForBlock($blockId);
         foreach ($pending as $sub) {
-            if ($sub['percentage'] === null || $sub['score'] === null) {
+            if ($sub['grade'] === null && empty($sub['auto_graded'])) {
                 throw HttpException::unprocessable(
                     'Hay entregas sin calificar (ensayos). Corrija todas las notas antes de liberar.'
                 );
@@ -474,16 +538,23 @@ final class H5pService
                 continue;
             }
             $studentId = (int) $sub['student_id'];
+
+            // Nota en puntos. Las auto-calificadas se calculan a partir del
+            // resultado H5P y el valor de la evaluación en la asignación.
+            // No se calcula una nota final compuesta: cada evaluación conserva
+            // su propia nota según el valor que le asignó el docente.
             $assignments = $this->progress->assignmentsForSaber($studentId, (int) $unit['saber_id']);
             foreach ($assignments as $assignmentId) {
-                $this->grades->recordH5p(
-                    $assignmentId,
-                    $studentId,
-                    $blockId,
-                    (float) $sub['score'],
-                    (float) $sub['percentage']
-                );
-                $this->grades->recordComposite($assignmentId, $studentId);
+                $value = $this->grades->componentValue($assignmentId, $blockId);
+                if ($sub['grade'] === null) {
+                    $maxValue = $value !== null && $value > 0 ? $value : 20.0;
+                    $raw = (float) $sub['score'];
+                    $rawMax = (float) $sub['max_score'];
+                    $grade = $rawMax > 0 ? round(($raw / $rawMax) * $maxValue, 2) : 0.0;
+                } else {
+                    $grade = (float) $sub['grade'];
+                }
+                $this->grades->recordH5p($assignmentId, $studentId, $blockId, $grade);
             }
             Connection::run(
                 'UPDATE h5p_submissions SET status = :st, released_at = :at WHERE id = :id',

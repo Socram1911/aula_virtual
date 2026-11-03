@@ -350,8 +350,9 @@ CREATE TABLE IF NOT EXISTS sessions (
 ALTER TABLE grade_components MODIFY COLUMN source_type ENUM('ACTIVITIES','ASSESSMENTS','PROJECT','H5P') NOT NULL;
 ALTER TABLE grades MODIFY COLUMN source_type ENUM('ACTIVITY','ASSESSMENT','MANUAL','COMPOSITE','H5P') NOT NULL;
 
--- Evaluaciones H5P: pesos por contenido evaluable concreto.
+-- Evaluaciones H5P: valor en puntos por contenido evaluable concreto.
 ALTER TABLE grade_components ADD COLUMN IF NOT EXISTS block_id INT UNSIGNED NULL;
+ALTER TABLE grade_components ADD COLUMN IF NOT EXISTS value DECIMAL(5,2) NOT NULL DEFAULT 0.00;
 ALTER TABLE grade_components ADD CONSTRAINT fk_gc_block FOREIGN KEY (block_id) REFERENCES content_blocks(id) ON DELETE CASCADE;
 
 -- Entregas de evaluaciones H5P (un intento por estudiante y contenido).
@@ -362,6 +363,7 @@ CREATE TABLE IF NOT EXISTS h5p_submissions (
     score DECIMAL(10,2) NULL,
     max_score DECIMAL(10,2) NULL,
     percentage DECIMAL(5,2) NULL,
+    grade DECIMAL(10,2) NULL,
     auto_graded TINYINT(1) NOT NULL DEFAULT 0,
     answer_text TEXT NULL,
     status ENUM('PENDING','RELEASED') NOT NULL DEFAULT 'PENDING',
@@ -393,3 +395,7 @@ CREATE TABLE IF NOT EXISTS h5p_states (
 ALTER TABLE h5p_states ADD COLUMN IF NOT EXISTS sub_content_id INT NOT NULL DEFAULT 0;
 ALTER TABLE h5p_states DROP INDEX uq_h5p_state;
 ALTER TABLE h5p_states ADD UNIQUE KEY uq_h5p_state (student_id, block_id, sub_content_id);
+
+-- Modelo de puntos: valor por evaluación y nota en puntos.
+ALTER TABLE grade_components ADD COLUMN IF NOT EXISTS value DECIMAL(5,2) NOT NULL DEFAULT 0.00;
+ALTER TABLE h5p_submissions ADD COLUMN IF NOT EXISTS grade DECIMAL(10,2) NULL;

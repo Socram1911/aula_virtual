@@ -1,11 +1,11 @@
 <?php
-/** @var \App\Modules\Content\Models\ContentBlock $block @var int $assignmentId @var array $submissions @var string $title */
-$to20 = fn ($pct) => number_format(((float) $pct) / 5, 2, '.', '');
+/** @var \App\Modules\Content\Models\ContentBlock $block @var int $assignmentId @var array $submissions @var string $title @var float $maxValue */
 $pending = 0;
 $released = 0;
 foreach ($submissions as $s) {
     $s['status'] === 'RELEASED' ? $released++ : $pending++;
 }
+$maxValue = (float) $maxValue;
 ?>
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1 class="h4 mb-0"><?= e($title) ?></h1>
@@ -14,7 +14,7 @@ foreach ($submissions as $s) {
 
 <div class="card card-av mb-3">
     <div class="card-body">
-        <p class="mb-1">Entregas: <strong><?= $pending ?></strong> pendientes · <strong><?= $released ?></strong> liberadas.</p>
+        <p class="mb-1">Entregas: <strong><?= $pending ?></strong> pendientes · <strong><?= $released ?></strong> liberadas. Valor de la evaluación: <strong><?= e(number_format($maxValue, 2)) ?> puntos</strong>.</p>
         <?php if ($submissions): ?>
         <form method="post" action="<?= url('/saber-assignments/' . $assignmentId . '/h5p/' . (int) $block->id . '/release') ?>"
               onsubmit="return confirm('¿Liberar los resultados para todos los estudiantes?');">
@@ -29,7 +29,7 @@ foreach ($submissions as $s) {
     <div class="table-responsive">
         <table class="table table-sm align-middle mb-0">
             <thead class="table-light">
-                <tr><th>Estudiante</th><th>Enviado</th><th>Tipo</th><th>Respuesta</th><th>Nota (20)</th><th>Estado</th><th class="text-end">Acción</th></tr>
+                <tr><th>Estudiante</th><th>Enviado</th><th>Tipo</th><th>Respuesta</th><th>Resultado</th><th>Nota (máx <?= e(number_format($maxValue, 2)) ?>)</th><th>Estado</th><th class="text-end">Acción</th></tr>
             </thead>
             <tbody>
             <?php foreach ($submissions as $s): ?>
@@ -37,6 +37,11 @@ foreach ($submissions as $s) {
                     $stateAnswerText = $s['answer_text'] !== null && $s['answer_text'] !== ''
                         ? $s['answer_text']
                         : null;
+                    // Nota en puntos: la guardada, o la sugerida (opción múltiple).
+                    $gradeVal = $s['grade'] !== null ? (float) $s['grade'] : null;
+                    if ($gradeVal === null && ! empty($s['auto_graded']) && (float) $s['max_score'] > 0) {
+                        $gradeVal = round(((float) $s['score'] / (float) $s['max_score']) * $maxValue, 2);
+                    }
                 ?>
                 <tr>
                     <td><?= e($s['last_name'] . ', ' . $s['first_name']) ?><div class="small text-muted"><?= e($s['email']) ?></div></td>
@@ -110,9 +115,15 @@ foreach ($submissions as $s) {
                         <?php endif; ?>
                     </td>
                     <td>
-                        <?php if ($s['percentage'] !== null): ?>
-                            <strong><?= e($to20($s['percentage'])) ?></strong>
-                            <span class="small text-muted">(<?= e(number_format((float) $s['percentage'], 2)) ?>%)</span>
+                        <?php if (! empty($s['auto_graded'])): ?>
+                            <span class="text-muted small"><?= e(number_format((float) $s['score'], 2)) ?> / <?= e(number_format((float) $s['max_score'], 2)) ?></span>
+                        <?php else: ?>
+                            <span class="text-muted small">—</span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php if ($gradeVal !== null): ?>
+                            <strong><?= e(number_format($gradeVal, 2)) ?></strong>
                         <?php else: ?>—<?php endif; ?>
                     </td>
                     <td>
@@ -125,15 +136,15 @@ foreach ($submissions as $s) {
                     <td class="text-end">
                         <form method="post" action="<?= url('/api/h5p/submission/' . (int) $s['id'] . '/grade') ?>" class="d-flex gap-1 justify-content-end align-items-center">
                             <?= csrf_field() ?>
-                            <input type="hidden" name="max_score" value="20">
-                            <input type="number" step="0.01" min="0" max="20" name="score" class="form-control form-control-sm" style="width:80px"
-                                   value="<?= $s['score'] !== null ? e((string) $s['score']) : '' ?>" placeholder="Nota /20">
+                            <input type="hidden" name="max" value="<?= e(number_format($maxValue, 2)) ?>">
+                            <input type="number" step="0.01" min="0" max="<?= e(number_format($maxValue, 2)) ?>" name="grade" class="form-control form-control-sm" style="width:90px"
+                                   value="<?= $gradeVal !== null ? e(number_format($gradeVal, 2)) : '' ?>" placeholder="Nota">
                             <button class="btn btn-sm btn-primary">Guardar</button>
                         </form>
                     </td>
                 </tr>
             <?php endforeach; ?>
-            <?php if (! $submissions): ?><tr><td colspan="7" class="text-muted text-center py-4">Sin entregas todavía.</td></tr><?php endif; ?>
+            <?php if (! $submissions): ?><tr><td colspan="8" class="text-muted text-center py-4">Sin entregas todavía.</td></tr><?php endif; ?>
             </tbody>
         </table>
     </div>
